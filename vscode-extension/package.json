@@ -1,0 +1,70 @@
+{
+  "name": "papat-vscode",
+  "displayName": "PapaT",
+  "description": "Connect VS Code to PapaT phone-as-PC terminal",
+  "version": "0.5.0",
+  "publisher": "papat",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "papat.connect",
+        "title": "PapaT: Connect to Host"
+      },
+      {
+        "command": "papat.disconnect",
+        "title": "PapaT: Disconnect"
+      },
+      {
+        "command": "papat.showStatus",
+        "title": "PapaT: Show Connection Status"
+      }
+    ],
+    "configuration": {
+      "title": "PapaT",
+      "properties": {
+        "papat.host": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "PapaT host server address"
+        },
+        "papat.port": {
+          "type": "number",
+          "default": 3847,
+          "description": "PapaT host WebSocket port"
+        },
+        "papat.autoConnect": {
+          "type": "boolean",
+          "default": true,
+          "description": "Connect to PapaT host when VS Code starts"
+        },
+        "papat.openFilesOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Focus files in VS Code when the phone saves them"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "watch": "tsc -watch -p .",
+    "package": "npm run build"
+  },
+  "dependencies": {
+    "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "@types/vscode": "^1.85.0",
+    "@types/ws": "^8.18.0",
+    "typescript": "^5.8.2"
+  }
+}
