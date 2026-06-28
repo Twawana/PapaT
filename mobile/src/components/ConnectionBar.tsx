@@ -189,7 +189,11 @@ export function ConnectionBar({
         </View>
       ) : null}
 
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {error ? (
+        <Text style={styles.errorText} selectable>
+          {error}
+        </Text>
+      ) : null}
 
       <QrPairModal
         visible={qrVisible}

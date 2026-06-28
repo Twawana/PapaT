@@ -17,6 +17,7 @@ import {
   AgentUiMessage,
   ServerMessage,
 } from "../types/protocol";
+import { errorMessage, runSyncSafely } from "../utils/errors";
 
 function createUiId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -25,10 +26,12 @@ function createUiId(prefix: string): string {
 function historyToUi(messages: AgentChatMessage[]): AgentUiMessage[] {
   const items: AgentUiMessage[] = [];
 
-  for (const message of messages) {
+  for (let i = 0; i < messages.length; i++) {
+    const message = messages[i]!;
+
     if (message.role === "user") {
       items.push({
-        id: createUiId("user"),
+        id: `hist-user-${i}`,
         kind: "user",
         content: message.content,
       });
@@ -39,7 +42,7 @@ function historyToUi(messages: AgentChatMessage[]): AgentUiMessage[] {
             (m) => m.role === "tool" && m.toolCallId === call.id
           );
           items.push({
-            id: call.id,
+            id: call.id || `hist-tool-${i}-${call.name}`,
             kind: "tool",
             name: call.name,
             args: call.arguments,
@@ -51,15 +54,37 @@ function historyToUi(messages: AgentChatMessage[]): AgentUiMessage[] {
       }
       if (message.content.trim()) {
         items.push({
-          id: createUiId("assistant"),
+          id: `hist-assistant-${i}`,
           kind: "assistant",
           content: message.content,
+        });
+      }
+    } else if (message.role === "tool" && message.toolCallId) {
+      const already = items.some(
+        (item) => item.kind === "tool" && item.id === message.toolCallId
+      );
+      if (!already) {
+        items.push({
+          id: message.toolCallId,
+          kind: "tool",
+          name: message.name ?? "tool",
+          result: message.content,
+          isError: message.isError,
+          status: "done",
         });
       }
     }
   }
 
   return items;
+}
+
+function safeHistoryToUi(messages: AgentChatMessage[]): AgentUiMessage[] {
+  if (!Array.isArray(messages)) {
+    return [];
+  }
+
+  return runSyncSafely(() => historyToUi(messages), []);
 }
 
 export function useAgentChat(isConnected: boolean, onError?: (message: string | null) => void) {
@@ -74,7 +99,11 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
 
   const persistSessions = useCallback(async (nextSessions: AgentSessionSummary[]) => {
     setSessions(nextSessions);
-    await saveSessions(nextSessions);
+    try {
+      await saveSessions(nextSessions);
+    } catch (err) {
+      console.error("[PapaT] Failed to persist chat sessions", err);
+    }
   }, []);
 
   const loadHistory = useCallback(async (sessionId = sessionIdRef.current) => {
@@ -83,7 +112,7 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
     try {
       const result = await papatClient.getAgentHistory(sessionId);
       if (sessionId === sessionIdRef.current) {
-        setMessages(historyToUi(result.messages));
+        setMessages(safeHistoryToUi(result.messages));
       }
     } catch {
       if (sessionId === sessionIdRef.current) {
@@ -115,19 +144,26 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
     let cancelled = false;
 
     void (async () => {
-      const savedSessions = await loadSavedSessions();
-      const savedActiveId = await loadActiveSessionId();
-      const initialId =
-        savedActiveId && savedSessions.some((s) => s.sessionId === savedActiveId)
-          ? savedActiveId
-          : savedSessions[0]?.sessionId ?? createSessionId();
+      try {
+        const savedSessions = await loadSavedSessions();
+        const savedActiveId = await loadActiveSessionId();
+        const initialId =
+          savedActiveId && savedSessions.some((s) => s.sessionId === savedActiveId)
+            ? savedActiveId
+            : savedSessions[0]?.sessionId ?? createSessionId();
 
-      if (cancelled) return;
+        if (cancelled) return;
 
-      sessionIdRef.current = initialId;
-      setActiveSessionId(initialId);
-      setSessions(savedSessions);
-      sessionsLoadedRef.current = true;
+        sessionIdRef.current = initialId;
+        setActiveSessionId(initialId);
+        setSessions(savedSessions);
+        sessionsLoadedRef.current = true;
+      } catch (err) {
+        console.error("[PapaT] Failed to load chat sessions", err);
+        if (!cancelled) {
+          sessionsLoadedRef.current = true;
+        }
+      }
     })();
 
     return () => {
@@ -149,8 +185,8 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
     })();
   }, [isConnected, loadHistory, refreshSessions]);
 
-  useEffect(() => {
-    const removeListener = papatClient.addMessageListener((message: ServerMessage) => {
+  const handleAgentMessage = useCallback(
+    (message: ServerMessage) => {
       const sessionId = sessionIdRef.current;
       if ("sessionId" in message && message.sessionId !== sessionId) {
         return;
@@ -160,17 +196,6 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
         case "agent_started":
           setIsRunning(true);
           assistantIdRef.current = null;
-          setMessages((prev) => {
-            if (prev.some((item) => item.kind === "assistant" && item.streaming)) {
-              return prev;
-            }
-            const id = createUiId("assistant");
-            assistantIdRef.current = id;
-            return [
-              ...prev,
-              { id, kind: "assistant", content: "", streaming: true },
-            ];
-          });
           break;
 
         case "agent_delta": {
@@ -249,7 +274,6 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
               item.kind === "assistant" ? { ...item, streaming: false } : item
             )
           );
-          void loadHistory();
           void refreshSessions();
           break;
 
@@ -269,10 +293,21 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
           ]);
           break;
       }
+    },
+    [onError, refreshSessions]
+  );
+
+  useEffect(() => {
+    const removeListener = papatClient.addMessageListener((message) => {
+      runSyncSafely(
+        () => handleAgentMessage(message),
+        undefined,
+        (msg) => onError?.(msg)
+      );
     });
 
     return removeListener;
-  }, [loadHistory, onError, refreshSessions]);
+  }, [handleAgentMessage, onError]);
 
   const selectSession = useCallback(
     async (sessionId: string) => {
@@ -341,9 +376,13 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
   }, [input, isConnected, isRunning, messages, persistSessions, sessions]);
 
   const cancel = useCallback(() => {
-    papatClient.cancelAgent(sessionIdRef.current);
+    try {
+      papatClient.cancelAgent(sessionIdRef.current);
+    } catch (err) {
+      onError?.(errorMessage(err, "Failed to cancel agent"));
+    }
     setIsRunning(false);
-  }, []);
+  }, [onError]);
 
   const clearChat = useCallback(async () => {
     if (!isConnected || isRunning) return;

@@ -7,6 +7,7 @@ import {
   saveCredentials,
 } from "../services/credentials";
 import { ConnectionStatus } from "../types/protocol";
+import { errorMessage } from "../utils/errors";
 
 const DEFAULT_HOST =
   __DEV__ && Platform.OS === "android" ? "10.0.2.2" : "localhost";
@@ -26,14 +27,18 @@ export function useConnection() {
   const [savedToken, setSavedToken] = useState<string | null>(null);
 
   useEffect(() => {
-    void loadCredentials().then((creds) => {
-      if (!creds) return;
-      setHost(creds.host);
-      setPort(creds.port);
-      setSavedToken(creds.token);
-      setDeviceName(creds.deviceName ?? null);
-      setIsPaired(true);
-    });
+    void loadCredentials()
+      .then((creds) => {
+        if (!creds) return;
+        setHost(creds.host);
+        setPort(creds.port);
+        setSavedToken(creds.token);
+        setDeviceName(creds.deviceName ?? null);
+        setIsPaired(true);
+      })
+      .catch((err) => {
+        console.error("[PapaT] Failed to load saved credentials", err);
+      });
   }, []);
 
   const applySession = useCallback(
@@ -80,6 +85,8 @@ export function useConnection() {
             host: connectHost,
             port: String(connectPort),
             deviceName: message.deviceName,
+          }).catch((err) => {
+            console.error("[PapaT] Failed to save credentials", err);
           });
         }
       }
@@ -192,13 +199,19 @@ export function useConnection() {
 
   const handleForgetDevice = useCallback(async () => {
     papatClient.disconnect();
-    await clearCredentials();
-    setSavedToken(null);
-    setIsPaired(false);
-    setDeviceName(null);
-    setConnectionStatus("disconnected");
-    setServerInfo(null);
-    setError(null);
+    try {
+      await clearCredentials();
+      setSavedToken(null);
+      setIsPaired(false);
+      setDeviceName(null);
+      setConnectionStatus("disconnected");
+      setServerInfo(null);
+      setError(null);
+    } catch (err) {
+      setConnectionStatus("disconnected");
+      setServerInfo(null);
+      setError(errorMessage(err, "Failed to forget device"));
+    }
   }, []);
 
   return {

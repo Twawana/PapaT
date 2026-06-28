@@ -1,4 +1,5 @@
 import { ClientMessage, EditorId, ServerMessage } from "../types/protocol";
+import { errorMessage } from "../utils/errors";
 
 type MessageHandler = (message: ServerMessage) => void;
 type StatusHandler = (status: "open" | "close" | "error", detail?: string) => void;
@@ -72,7 +73,14 @@ export class PapaTClient {
 
     this.emitStatus("open", "connecting");
 
-    const ws = new WebSocket(this.url);
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(this.url);
+    } catch (err) {
+      this.emitStatus("error", errorMessage(err, "Failed to connect to host"));
+      return;
+    }
+
     this.ws = ws;
 
     ws.onopen = () => {
@@ -104,11 +112,9 @@ export class PapaTClient {
         if (this.tryResolvePending(message)) {
           return;
         }
-        for (const listener of this.messageListeners) {
-          listener(message);
-        }
-      } catch {
-        this.emitStatus("error", "Failed to parse server message");
+        this.emitMessage(message);
+      } catch (err) {
+        this.emitStatus("error", errorMessage(err, "Failed to parse server message"));
       }
     };
 
@@ -327,7 +333,21 @@ export class PapaTClient {
 
   private emitStatus(status: "open" | "close" | "error", detail?: string): void {
     for (const listener of this.statusListeners) {
-      listener(status, detail);
+      try {
+        listener(status, detail);
+      } catch (err) {
+        console.error("[PapaT] Status listener failed", err);
+      }
+    }
+  }
+
+  private emitMessage(message: ServerMessage): void {
+    for (const listener of this.messageListeners) {
+      try {
+        listener(message);
+      } catch (err) {
+        console.error("[PapaT] Message listener failed", err);
+      }
     }
   }
 

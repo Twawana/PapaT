@@ -1,6 +1,5 @@
-import React, { useRef } from "react";
+import React, { useMemo, useRef } from "react";
 import {
-  ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -11,6 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { CookingBanner } from "../components/CookingBanner";
 import { useAgentChat } from "../hooks/useAgentChat";
 import { AgentUiMessage } from "../types/protocol";
 
@@ -27,23 +27,26 @@ function ToolCard({ item }: { item: Extract<AgentUiMessage, { kind: "tool" }> })
     : "";
 
   return (
-    <View style={[styles.toolCard, item.isError && styles.toolCardError]}>
-      <View style={styles.toolHeader}>
-        <Text style={styles.toolName}>{item.name}</Text>
-        <Text style={styles.toolStatus}>
-          {item.status === "running" ? "Running..." : item.isError ? "Failed" : "Done"}
-        </Text>
+    <View style={styles.messageBlock}>
+      <Text style={styles.senderLabel}>Papa T · tool</Text>
+      <View style={[styles.toolCard, item.isError && styles.toolCardError]}>
+        <View style={styles.toolHeader}>
+          <Text style={styles.toolName}>{item.name}</Text>
+          <Text style={styles.toolStatus}>
+            {item.status === "running" ? "Running..." : item.isError ? "Failed" : "Done"}
+          </Text>
+        </View>
+        {argsPreview ? (
+          <Text style={styles.toolArgs} numberOfLines={6} selectable>
+            {argsPreview}
+          </Text>
+        ) : null}
+        {item.result ? (
+          <Text style={styles.toolResult} selectable>
+            {item.result}
+          </Text>
+        ) : null}
       </View>
-      {argsPreview ? (
-        <Text style={styles.toolArgs} numberOfLines={4}>
-          {argsPreview}
-        </Text>
-      ) : null}
-      {item.result ? (
-        <Text style={styles.toolResult} selectable>
-          {item.result}
-        </Text>
-      ) : null}
     </View>
   );
 }
@@ -51,17 +54,26 @@ function ToolCard({ item }: { item: Extract<AgentUiMessage, { kind: "tool" }> })
 function MessageBubble({ item }: { item: AgentUiMessage }) {
   if (item.kind === "user") {
     return (
-      <View style={[styles.bubble, styles.userBubble]}>
-        <Text style={styles.userText}>{item.content}</Text>
+      <View style={styles.messageBlock}>
+        <Text style={[styles.senderLabel, styles.senderLabelYou]}>You</Text>
+        <View style={[styles.bubble, styles.userBubble]}>
+          <Text style={styles.userText} selectable>
+            {item.content}
+          </Text>
+        </View>
       </View>
     );
   }
 
   if (item.kind === "assistant") {
     return (
-      <View style={[styles.bubble, styles.assistantBubble]}>
-        <Text style={styles.assistantText}>{item.content}</Text>
-        {item.streaming ? <ActivityIndicator color="#58a6ff" size="small" /> : null}
+      <View style={styles.messageBlock}>
+        <Text style={styles.senderLabel}>Papa T</Text>
+        <View style={[styles.bubble, styles.assistantBubble]}>
+          <Text style={styles.assistantText} selectable>
+            {item.content}
+          </Text>
+        </View>
       </View>
     );
   }
@@ -71,15 +83,42 @@ function MessageBubble({ item }: { item: AgentUiMessage }) {
   }
 
   return (
-    <View style={[styles.bubble, styles.errorBubble]}>
-      <Text style={styles.errorText}>{item.content}</Text>
+    <View style={styles.messageBlock}>
+      <Text style={[styles.senderLabel, styles.senderLabelError]}>Error</Text>
+      <View style={[styles.bubble, styles.errorBubble]}>
+        <Text style={styles.errorText} selectable>
+          {item.content}
+        </Text>
+      </View>
     </View>
   );
+}
+
+function visibleMessages(messages: AgentUiMessage[]): AgentUiMessage[] {
+  return messages.filter((item) => {
+    if (item.kind === "assistant") {
+      return item.content.trim().length > 0;
+    }
+    return true;
+  });
 }
 
 export default function AgentScreen({ isConnected, onError }: Props) {
   const listRef = useRef<FlatList>(null);
   const chat = useAgentChat(isConnected, onError);
+
+  const displayMessages = useMemo(
+    () => visibleMessages(chat.messages),
+    [chat.messages]
+  );
+
+  const cookingSubtitle = useMemo(() => {
+    const lastTool = [...chat.messages].reverse().find((m) => m.kind === "tool");
+    if (lastTool && lastTool.kind === "tool" && lastTool.status === "running") {
+      return `Running ${lastTool.name} on your PC`;
+    }
+    return "Thinking and fixing on your PC — hang tight";
+  }, [chat.messages]);
 
   const handleSend = () => {
     onError(null);
@@ -147,23 +186,27 @@ export default function AgentScreen({ isConnected, onError }: Props) {
 
       {!isConnected ? (
         <Text style={styles.hint}>Connect to your PC to use the agent.</Text>
-      ) : chat.isRunning ? (
-        <Text style={styles.hint}>Agent is thinking on your PC… (can take up to a minute)</Text>
       ) : null}
+
+      <CookingBanner visible={isConnected && chat.isRunning} subtitle={cookingSubtitle} />
 
       <FlatList
         ref={listRef}
-        data={chat.messages}
+        data={displayMessages}
         keyExtractor={(item, index) => `${item.kind}-${item.id}-${index}`}
         style={styles.list}
         contentContainerStyle={styles.listContent}
+        removeClippedSubviews={false}
+        keyboardShouldPersistTaps="handled"
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
         ListEmptyComponent={
-          <Text style={styles.empty}>
-            {hasCurrentSession
-              ? "This chat is empty. Send a message to continue."
-              : "Uses your logged-in Cursor agent on your PC. Ask it to create files, fix bugs, or run commands."}
-          </Text>
+          chat.isRunning ? null : (
+            <Text style={styles.empty}>
+              {hasCurrentSession
+                ? "This chat is empty. Send a message to start."
+                : "Ask Papa T to create files, fix bugs, or run commands on your PC."}
+            </Text>
+          )
         }
         renderItem={({ item }) => <MessageBubble item={item} />}
       />
@@ -177,6 +220,9 @@ export default function AgentScreen({ isConnected, onError }: Props) {
           placeholderTextColor="#484f58"
           multiline
           editable={isConnected && !chat.isRunning}
+          contextMenuHidden={false}
+          selectionColor="#58a6ff"
+          selectTextOnFocus={false}
         />
         {chat.isRunning ? (
           <Pressable style={styles.stopBtn} onPress={chat.cancel}>
@@ -283,7 +329,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: 12,
-    gap: 8,
+    gap: 10,
   },
   empty: {
     color: "#8b949e",
@@ -291,6 +337,26 @@ const styles = StyleSheet.create({
     marginTop: 24,
     fontSize: 14,
     lineHeight: 20,
+  },
+  messageBlock: {
+    gap: 4,
+  },
+  senderLabel: {
+    color: "#8b949e",
+    fontSize: 11,
+    fontWeight: "700",
+    marginLeft: 4,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  senderLabelYou: {
+    alignSelf: "flex-end",
+    marginRight: 4,
+    marginLeft: 0,
+    color: "#58a6ff",
+  },
+  senderLabelError: {
+    color: "#f85149",
   },
   bubble: {
     borderRadius: 12,

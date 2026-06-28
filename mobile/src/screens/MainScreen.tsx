@@ -1,37 +1,60 @@
-import React, { useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
-  Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { ConnectionBar } from "../components/ConnectionBar";
+import { ErrorBoundary } from "../components/ErrorBoundary";
+import {
+  LiquidGlassTabBar,
+  tabBarInset,
+} from "../components/LiquidGlassTabBar";
+import { resolveTabLabel } from "../config/navigationTabs";
 import { useConnection } from "../hooks/useConnection";
-import FilesScreen from "./FilesScreen";
-import HomeScreen from "./HomeScreen";
-import ProjectsScreen from "./ProjectsScreen";
-import AgentScreen from "./AgentScreen";
-import TerminalScreen from "./TerminalScreen";
-
-type Tab = "open" | "agent" | "terminal" | "code" | "files";
+import { useNavigationTabs } from "../hooks/useNavigationTabs";
 
 export default function MainScreen() {
-  const [activeTab, setActiveTab] = useState<Tab>("open");
   const [workspaceName, setWorkspaceName] = useState("workspace");
   const connection = useConnection();
+  const insets = useSafeAreaInsets();
 
-  const handleWorkspaceChange = (path: string, name: string) => {
-    connection.setWorkspacePath(path);
-    setWorkspaceName(name);
-  };
+  const handleWorkspaceChange = useCallback(
+    (path: string, name: string) => {
+      connection.setWorkspacePath(path);
+      setWorkspaceName(name);
+    },
+    [connection]
+  );
+
+  const navContext = useMemo(
+    () => ({
+      isConnected: connection.isConnected,
+      vscodeConnected: connection.vscodeConnected,
+      workspacePath: connection.workspacePath,
+      workspaceName,
+      onWorkspaceChange: handleWorkspaceChange,
+      onError: connection.setError,
+    }),
+    [
+      connection.isConnected,
+      connection.vscodeConnected,
+      connection.workspacePath,
+      connection.setError,
+      workspaceName,
+      handleWorkspaceChange,
+    ]
+  );
+
+  const navigation = useNavigationTabs(navContext);
+  const contentInset = tabBarInset(insets.bottom);
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+    <SafeAreaView style={styles.safe} edges={["top"]}>
       <StatusBar style="light" />
       <KeyboardAvoidingView
         style={styles.flex}
@@ -60,77 +83,32 @@ export default function MainScreen() {
           onError={connection.setError}
         />
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.tabScroll}
-          contentContainerStyle={styles.tabBar}
-        >
-          {(
-            [
-              ["open", "Open"],
-              ["agent", "Agent"],
-              ["terminal", "Terminal"],
-              ["code", "Code"],
-              ["files", "Files"],
-            ] as const
-          ).map(([id, label]) => (
-            <Pressable
-              key={id}
-              style={[styles.tab, activeTab === id && styles.tabActive]}
-              onPress={() => setActiveTab(id)}
+        <View style={[styles.content, { paddingBottom: contentInset }]}>
+          {navigation.tabs.map((tab) => (
+            <View
+              key={tab.id}
+              style={
+                navigation.activeTab === tab.id ? styles.panel : styles.panelHidden
+              }
             >
-              <Text
-                style={[
-                  styles.tabText,
-                  activeTab === id && styles.tabTextActive,
-                ]}
+              <ErrorBoundary
+                title={resolveTabLabel(tab, navContext)}
+                resetKey={`${tab.id}-${navigation.activeTab === tab.id ? "active" : "idle"}`}
+                onError={(error) => connection.setError(error.message)}
               >
-                {label}
-              </Text>
-            </Pressable>
+                {tab.render(navContext)}
+              </ErrorBoundary>
+            </View>
           ))}
-        </ScrollView>
-
-        <View style={styles.content}>
-          <View style={activeTab === "open" ? styles.panel : styles.panelHidden}>
-            <ProjectsScreen
-              isConnected={connection.isConnected}
-              vscodeConnected={connection.vscodeConnected}
-              workspacePath={connection.workspacePath}
-              onWorkspaceChange={handleWorkspaceChange}
-              onError={connection.setError}
-            />
-          </View>
-          <View style={activeTab === "agent" ? styles.panel : styles.panelHidden}>
-            <AgentScreen
-              isConnected={connection.isConnected}
-              onError={connection.setError}
-            />
-          </View>
-          <View style={activeTab === "terminal" ? styles.panel : styles.panelHidden}>
-            <TerminalScreen
-              isConnected={connection.isConnected}
-              onError={connection.setError}
-            />
-          </View>
-          <View style={activeTab === "code" ? styles.panel : styles.panelHidden}>
-            <HomeScreen
-              isConnected={connection.isConnected}
-              onError={connection.setError}
-            />
-          </View>
-          <View style={activeTab === "files" ? styles.panel : styles.panelHidden}>
-            <FilesScreen
-              key={connection.workspacePath ?? "default"}
-              isConnected={connection.isConnected}
-              vscodeConnected={connection.vscodeConnected}
-              workspaceName={workspaceName}
-              workspacePath={connection.workspacePath}
-              onError={connection.setError}
-            />
-          </View>
         </View>
+
+        <LiquidGlassTabBar
+          tabs={navigation.tabs}
+          activeTab={navigation.activeTab}
+          ctx={navContext}
+          bottomInset={insets.bottom}
+          onSelectTab={navigation.selectTab}
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -153,36 +131,6 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "700",
     color: "#f0f6fc",
-  },
-  tabScroll: {
-    maxHeight: 48,
-    marginBottom: 12,
-  },
-  tabBar: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  tab: {
-    minWidth: 72,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    backgroundColor: "#161b22",
-    borderWidth: 1,
-    borderColor: "#30363d",
-    alignItems: "center",
-  },
-  tabActive: {
-    backgroundColor: "#1f6feb",
-    borderColor: "#1f6feb",
-  },
-  tabText: {
-    color: "#8b949e",
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  tabTextActive: {
-    color: "#ffffff",
   },
   content: {
     flex: 1,
