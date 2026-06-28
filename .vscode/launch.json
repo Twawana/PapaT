@@ -2,14 +2,14 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "PapaT VS Code Extension",
+      "name": "Titus VS Code Extension",
       "type": "extensionHost",
       "request": "launch",
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}/vscode-extension"
       ],
       "outFiles": ["${workspaceFolder}/vscode-extension/dist/**/*.js"],
-      "preLaunchTask": "Build PapaT Extension",
+      "preLaunchTask": "Build Titus Extension",
       "timeout": 120000,
       "stopOnEntry": false,
       "sourceMaps": true

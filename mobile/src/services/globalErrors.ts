@@ -32,7 +32,7 @@ export function installGlobalErrorHandlers(): () => void {
   if (ErrorUtils) {
     ErrorUtils.setGlobalHandler((error: Error, isFatal?: boolean) => {
       notify(error, isFatal ? "A critical error occurred." : "An unexpected error occurred.");
-      console.error("[PapaT] Global error", { isFatal, error });
+      console.error("[Titus] Global error", { isFatal, error });
 
       if (__DEV__ && previousHandler) {
         previousHandler(error, isFatal);
@@ -45,7 +45,7 @@ export function installGlobalErrorHandlers(): () => void {
     preventDefault?: () => void;
   }) => {
     notify(event.reason, "An async operation failed.");
-    console.error("[PapaT] Unhandled promise rejection", event.reason);
+    console.error("[Titus] Unhandled promise rejection", event.reason);
     event.preventDefault?.();
   };
 

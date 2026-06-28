@@ -210,7 +210,7 @@ function formatCommandOutput(
 
 export function buildSystemPrompt(): string {
   return [
-    "You are PapaT, an AI coding agent running on the user's PC.",
+    "You are Titus, an AI coding agent running on the user's PC.",
     `Workspace root: ${getWorkspaceRoot()}`,
     "You can create and modify files, run shell commands, and execute JavaScript to debug issues.",
     "Always use relative paths from the workspace root for file tools.",

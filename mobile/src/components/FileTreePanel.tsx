@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { papatClient } from "../services/websocket";
+import { titusClient } from "../services/websocket";
 import { FileEntry } from "../types/protocol";
 import { copyPathToClipboard } from "../utils/clipboard";
 
@@ -24,10 +24,10 @@ export function FileTreePanel({ visible, workspaceKey, onOpenFile }: Props) {
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async (dir: string) => {
-    if (!papatClient.isConnected()) return;
+    if (!titusClient.isConnected()) return;
     setLoading(true);
     try {
-      const result = await papatClient.listDir(dir);
+      const result = await titusClient.listDir(dir);
       setPath(result.path || dir);
       setEntries(result.entries);
     } catch {

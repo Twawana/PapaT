@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { CookingBanner } from "../components/CookingBanner";
 import { useAgentChat } from "../hooks/useAgentChat";
+import { useTabBarInset } from "../hooks/useTabBarInset";
 import { AgentUiMessage } from "../types/protocol";
 import { dismissKeyboard, keyboardAvoidBehavior, keyboardPersistTaps } from "../utils/keyboard";
 
@@ -31,7 +32,7 @@ function ToolCard({ item }: { item: Extract<AgentUiMessage, { kind: "tool" }> })
 
   return (
     <View style={styles.messageBlock}>
-      <Text style={styles.senderLabel}>Papa T · tool</Text>
+      <Text style={styles.senderLabel}>Titus · tool</Text>
       <View style={[styles.toolCard, item.isError && styles.toolCardError]}>
         <View style={styles.toolHeader}>
           <Text style={styles.toolName}>{item.name}</Text>
@@ -71,7 +72,7 @@ function MessageBubble({ item }: { item: AgentUiMessage }) {
   if (item.kind === "assistant") {
     return (
       <View style={styles.messageBlock}>
-        <Text style={styles.senderLabel}>Papa T</Text>
+        <Text style={styles.senderLabel}>Titus</Text>
         <View style={[styles.bubble, styles.assistantBubble]}>
           <Text style={styles.assistantText} selectable>
             {item.content}
@@ -114,6 +115,7 @@ export default function AgentScreen({
 }: Props) {
   const listRef = useRef<FlatList>(null);
   const chat = useAgentChat(isConnected, onError);
+  const tabBarInset = useTabBarInset();
 
   const displayMessages = useMemo(
     () => visibleMessages(chat.messages),
@@ -223,7 +225,7 @@ export default function AgentScreen({
         data={displayMessages}
         keyExtractor={(item, index) => `${item.kind}-${item.id}-${index}`}
         style={styles.list}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingBottom: tabBarInset }]}
         removeClippedSubviews={false}
         keyboardShouldPersistTaps={keyboardPersistTaps}
         keyboardDismissMode="on-drag"
@@ -234,14 +236,14 @@ export default function AgentScreen({
             <Text style={styles.empty}>
               {hasCurrentSession
                 ? "This chat is empty. Send a message to start."
-                : "Ask Papa T to create files, fix bugs, or run commands on your PC."}
+                : "Ask Titus to create files, fix bugs, or run commands on your PC."}
             </Text>
           )
         }
         renderItem={({ item }) => <MessageBubble item={item} />}
       />
 
-      <View style={styles.inputRow}>
+      <View style={[styles.inputRow, { marginBottom: tabBarInset }]}>
         <TextInput
           style={styles.input}
           value={chat.input}

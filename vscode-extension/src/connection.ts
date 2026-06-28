@@ -10,7 +10,7 @@ import {
 const EXTENSION_VERSION = "0.5.0";
 const RECONNECT_MS = 3000;
 
-export class PapaTConnection {
+export class TitusConnection {
   private socket: WebSocket | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private intentionalClose = false;
@@ -22,9 +22,11 @@ export class PapaTConnection {
   ) {}
 
   connect(): void {
-    const config = vscode.workspace.getConfiguration("papat");
-    const host = config.get<string>("host", "127.0.0.1");
-    const port = config.get<number>("port", 3847);
+    const titus = vscode.workspace.getConfiguration("titus");
+    const legacy = vscode.workspace.getConfiguration("papat");
+    const host =
+      titus.get<string>("host") ?? legacy.get<string>("host", "127.0.0.1");
+    const port = titus.get<number>("port") ?? legacy.get<number>("port", 3847);
     const url = `ws://${host}:${port}`;
 
     this.intentionalClose = false;
@@ -35,7 +37,7 @@ export class PapaTConnection {
 
     socket.on("open", () => {
       this.connected = true;
-      this.updateStatus("connecting", `PapaT: connecting (${host}:${port})`);
+      this.updateStatus("connecting", `Titus: connecting (${host}:${port})`);
     });
 
     socket.on("message", (data) => {
@@ -46,13 +48,13 @@ export class PapaTConnection {
 
       if (message.type === "auth_required") {
         this.register();
-        this.updateStatus("connected", `PapaT: connected (${host}:${port})`);
+        this.updateStatus("connected", `Titus: connected (${host}:${port})`);
         return;
       }
 
       if (message.type === "connected") {
         this.register();
-        this.updateStatus("connected", `PapaT: connected (${host}:${port})`);
+        this.updateStatus("connected", `Titus: connected (${host}:${port})`);
         return;
       }
 
@@ -65,16 +67,16 @@ export class PapaTConnection {
       this.connected = false;
       this.socket = null;
       if (this.intentionalClose) {
-        this.updateStatus("disconnected", "PapaT: disconnected");
+        this.updateStatus("disconnected", "Titus: disconnected");
         return;
       }
 
-      this.updateStatus("connecting", "PapaT: reconnecting...");
+      this.updateStatus("connecting", "Titus: reconnecting...");
       this.scheduleReconnect();
     });
 
     socket.on("error", () => {
-      this.updateStatus("error", "PapaT: host unreachable");
+      this.updateStatus("error", "Titus: host unreachable");
     });
   }
 
@@ -87,7 +89,7 @@ export class PapaTConnection {
     this.socket?.close();
     this.socket = null;
     this.connected = false;
-    this.updateStatus("disconnected", "PapaT: disconnected");
+    this.updateStatus("disconnected", "Titus: disconnected");
   }
 
   isConnected(): boolean {
@@ -138,8 +140,8 @@ export class PapaTConnection {
     text: string
   ): void {
     this.statusBar.text = text;
-    this.statusBar.tooltip = "PapaT phone bridge";
-    this.statusBar.command = "papat.showStatus";
+    this.statusBar.tooltip = "Titus phone bridge";
+    this.statusBar.command = "titus.showStatus";
 
     if (state === "connected") {
       this.statusBar.backgroundColor = undefined;

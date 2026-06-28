@@ -1,8 +1,8 @@
 import * as SecureStore from "expo-secure-store";
 import { AgentSessionSummary } from "../types/protocol";
 
-const SESSIONS_KEY = "papat.agent.sessions";
-const ACTIVE_SESSION_KEY = "papat.agent.activeSessionId";
+const SESSIONS_KEY = "titus.agent.sessions";
+const ACTIVE_SESSION_KEY = "titus.agent.activeSessionId";
 
 export function createSessionId(): string {
   return `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

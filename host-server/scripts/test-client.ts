@@ -1,11 +1,11 @@
 /**
- * CLI test client for PapaT host server.
+ * CLI test client for Titus host server.
  * Run while host-server is running: npx tsx scripts/test-client.ts
  */
 import WebSocket from "ws";
 
-const HOST = process.env.PAPAT_TEST_HOST || "localhost";
-const PORT = Number(process.env.PAPAT_TEST_PORT) || 3847;
+const HOST = process.env.TITUS_TEST_HOST || process.env.PAPAT_TEST_HOST || "localhost";
+const PORT = Number(process.env.TITUS_TEST_PORT || process.env.PAPAT_TEST_PORT) || 3847;
 
 const ws = new WebSocket(`ws://${HOST}:${PORT}`);
 const execId = `test-${Date.now()}`;
@@ -17,7 +17,7 @@ const deleteId = `delete-${Date.now()}`;
 let phase: "execute" | "list" | "write" | "read" | "delete" | "done" = "execute";
 
 const code = `
-console.log("PapaT CLI test");
+console.log("Titus CLI test");
 console.log("Node version:", process.version);
 console.log("1 + 1 =", 1 + 1);
 `;
@@ -61,7 +61,7 @@ ws.on("message", (data) => {
           type: "fs_write",
           id: writeId,
           path: "cli-test.txt",
-          content: "hello from PapaT MVP2\n",
+          content: "hello from Titus MVP2\n",
         });
       }
       break;

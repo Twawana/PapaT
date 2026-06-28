@@ -22,10 +22,10 @@ function createRequestId(prefix: string): string {
 }
 
 /**
- * Thin WebSocket wrapper for PapaT host communication.
+ * Thin WebSocket wrapper for Titus host communication.
  * Supports multiple message/status listeners and request/response pairs.
  */
-export class PapaTClient {
+export class TitusClient {
   private ws: WebSocket | null = null;
   private url = "";
   private authenticated = false;
@@ -425,7 +425,7 @@ export class PapaTClient {
       try {
         listener(status, detail);
       } catch (err) {
-        console.error("[PapaT] Status listener failed", err);
+        console.error("[Titus] Status listener failed", err);
       }
     }
   }
@@ -435,7 +435,7 @@ export class PapaTClient {
       try {
         listener(message);
       } catch (err) {
-        console.error("[PapaT] Message listener failed", err);
+        console.error("[Titus] Message listener failed", err);
       }
     }
   }
@@ -519,4 +519,4 @@ export class PapaTClient {
   }
 }
 
-export const papatClient = new PapaTClient();
+export const titusClient = new TitusClient();

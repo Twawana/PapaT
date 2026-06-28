@@ -1,23 +1,22 @@
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { RecentFolder } from "./protocol";
+import { ensureDataDir, getDataDir } from "./data-dir";
 
-const DATA_DIR = path.join(os.homedir(), ".papat");
-const RECENT_FILE = path.join(DATA_DIR, "recent-folders.json");
 const MAX_RECENT = 12;
 
-function ensureDataDir(): void {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+function recentFile(): string {
+  return path.join(getDataDir(), "recent-folders.json");
 }
 
 function loadAll(): RecentFolder[] {
   try {
     ensureDataDir();
-    if (!fs.existsSync(RECENT_FILE)) {
+    const file = recentFile();
+    if (!fs.existsSync(file)) {
       return [];
     }
-    const raw = fs.readFileSync(RECENT_FILE, "utf-8");
+    const raw = fs.readFileSync(file, "utf-8");
     const parsed = JSON.parse(raw) as RecentFolder[];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -27,7 +26,7 @@ function loadAll(): RecentFolder[] {
 
 function saveAll(entries: RecentFolder[]): void {
   ensureDataDir();
-  fs.writeFileSync(RECENT_FILE, JSON.stringify(entries, null, 2), "utf-8");
+  fs.writeFileSync(recentFile(), JSON.stringify(entries, null, 2), "utf-8");
 }
 
 export function getRecentFolders(): RecentFolder[] {

@@ -12,7 +12,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { papatClient } from "../services/websocket";
+import { titusClient } from "../services/websocket";
 import { dismissKeyboard, keyboardPersistTaps } from "../utils/keyboard";
 import { BrowseEntry, BrowseRoot, FileEntry } from "../types/protocol";
 import {
@@ -23,6 +23,7 @@ import {
   pathLabel,
 } from "../utils/paths";
 import { copyPathToClipboard } from "../utils/clipboard";
+import { useTabBarInset } from "../hooks/useTabBarInset";
 
 interface Props {
   isConnected: boolean;
@@ -103,6 +104,7 @@ export default function FilesScreen({
   const [browsePath, setBrowsePath] = useState<string | null>(null);
   const [browseEntries, setBrowseEntries] = useState<BrowseEntry[]>([]);
   const [browseRoots, setBrowseRoots] = useState<BrowseRoot[]>([]);
+  const tabBarInset = useTabBarInset();
   const [browseLoading, setBrowseLoading] = useState(false);
 
   const [moveTarget, setMoveTarget] = useState<FileEntry | null>(null);
@@ -127,7 +129,7 @@ export default function FilesScreen({
       }
 
       try {
-        const result = await papatClient.listDir(path);
+        const result = await titusClient.listDir(path);
         setCurrentPath(result.path || ".");
         setEntries(result.entries);
         onError(null);
@@ -163,7 +165,7 @@ export default function FilesScreen({
 
     try {
       setLoading(true);
-      const result = await papatClient.readFile(entry.path);
+      const result = await titusClient.readFile(entry.path);
       setEditorPath(result.path);
       setEditorContent(result.content);
       setEditorDirty(false);
@@ -178,7 +180,7 @@ export default function FilesScreen({
   const openInVscode = async (path: string) => {
     try {
       setOpeningVscode(true);
-      const result = await papatClient.openInVscode(path);
+      const result = await titusClient.openInVscode(path);
       if (!result.ok) {
         onError(result.message ?? "VS Code is not connected");
       } else {
@@ -194,7 +196,7 @@ export default function FilesScreen({
   const saveFile = async () => {
     try {
       setSaving(true);
-      await papatClient.writeFile(editorPath, editorContent, false);
+      await titusClient.writeFile(editorPath, editorContent, false);
       setEditorDirty(false);
       setEditorVisible(false);
       await loadDirectory(currentPath, true);
@@ -207,7 +209,7 @@ export default function FilesScreen({
 
   const deleteEntry = async (entry: FileEntry) => {
     try {
-      await papatClient.deletePath(entry.path);
+      await titusClient.deletePath(entry.path);
       await loadDirectory(currentPath, true);
     } catch (err) {
       onError(err instanceof Error ? err.message : "Failed to delete");
@@ -289,7 +291,7 @@ export default function FilesScreen({
     if (promptKind === "rename" && renameTarget) {
       const dest = joinPath(dirname(renameTarget.path), name);
       try {
-        await papatClient.movePath(renameTarget.path, dest);
+        await titusClient.movePath(renameTarget.path, dest);
         await loadDirectory(currentPath, true);
       } catch (err) {
         onError(err instanceof Error ? err.message : "Failed to rename");
@@ -304,9 +306,9 @@ export default function FilesScreen({
 
     try {
       if (promptKind === "file") {
-        await papatClient.writeFile(newPath, "", true);
+        await titusClient.writeFile(newPath, "", true);
       } else {
-        await papatClient.mkdir(newPath);
+        await titusClient.mkdir(newPath);
       }
       await loadDirectory(currentPath, true);
     } catch (err) {
@@ -326,11 +328,11 @@ export default function FilesScreen({
     setBrowseLoading(true);
 
     try {
-      const roots = await papatClient.getBrowseRoots();
+      const roots = await titusClient.getBrowseRoots();
       setBrowseRoots(roots.roots);
       const first = roots.roots[0]?.path;
       if (first) {
-        const listing = await papatClient.browseList(first);
+        const listing = await titusClient.browseList(first);
         setBrowsePath(listing.path);
         setBrowseEntries(listing.entries);
       }
@@ -345,7 +347,7 @@ export default function FilesScreen({
   const enterBrowseFolder = async (path: string) => {
     setBrowseLoading(true);
     try {
-      const listing = await papatClient.browseList(path);
+      const listing = await titusClient.browseList(path);
       setBrowsePath(listing.path);
       setBrowseEntries(listing.entries);
     } catch (err) {
@@ -381,11 +383,11 @@ export default function FilesScreen({
     setMoveDestLoading(true);
 
     try {
-      const roots = await papatClient.getBrowseRoots();
+      const roots = await titusClient.getBrowseRoots();
       setMoveDestRoots(roots.roots);
       const first = roots.roots[0]?.path;
       if (first) {
-        const listing = await papatClient.browseList(first);
+        const listing = await titusClient.browseList(first);
         setMoveDestPath(listing.path);
         setMoveDestEntries(listing.entries);
       }
@@ -400,7 +402,7 @@ export default function FilesScreen({
   const enterMoveDest = async (path: string) => {
     setMoveDestLoading(true);
     try {
-      const listing = await papatClient.browseList(path);
+      const listing = await titusClient.browseList(path);
       setMoveDestPath(listing.path);
       setMoveDestEntries(listing.entries);
     } catch (err) {
@@ -423,7 +425,7 @@ export default function FilesScreen({
 
     const dest = joinPath(moveDestPath.replace(/\\/g, "/"), moveTarget.name);
     try {
-      await papatClient.movePath(moveTarget.path, dest);
+      await titusClient.movePath(moveTarget.path, dest);
       setMoveTarget(null);
       setMoveDestPath(null);
       await loadDirectory(currentPath, true);
@@ -563,6 +565,8 @@ export default function FilesScreen({
         <FlatList
           data={entries}
           keyExtractor={(item) => item.path}
+          style={styles.list}
+          contentContainerStyle={{ paddingBottom: tabBarInset }}
           keyboardShouldPersistTaps={keyboardPersistTaps}
           keyboardDismissMode="on-drag"
           onScrollBeginDrag={dismissKeyboard}
@@ -602,7 +606,7 @@ export default function FilesScreen({
 
       {canGoUp ? (
         <Pressable
-          style={styles.backBtn}
+          style={[styles.backBtn, { marginBottom: tabBarInset }]}
           onPress={() => setCurrentPath(parentPath(currentPath))}
         >
           <Text style={styles.backBtnText}>↑ Up</Text>
@@ -822,6 +826,9 @@ export default function FilesScreen({
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  list: {
     flex: 1,
   },
   toolbar: {

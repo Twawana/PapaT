@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "PapaT",
-    "slug": "papat",
+    "name": "Titus",
+    "slug": "titus",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -14,14 +14,14 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.papat.mobile"
+      "bundleIdentifier": "com.titus.mobile"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0d1117"
       },
-      "package": "com.papat.mobile"
+      "package": "com.titus.mobile"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -31,7 +31,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow PapaT to scan the pairing QR code on your PC."
+          "cameraPermission": "Allow Titus to scan the pairing QR code on your PC."
         }
       ],
       "expo-secure-store"

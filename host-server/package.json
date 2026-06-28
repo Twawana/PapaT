@@ -1,7 +1,7 @@
 {
-  "name": "papat-host-server",
+  "name": "titus-host-server",
   "version": "0.2.0",
-  "description": "PapaT PC host - WebSocket server for remote code execution",
+  "description": "Titus PC host - WebSocket server for remote code execution",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",

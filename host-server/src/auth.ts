@@ -8,10 +8,13 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { config } from "./config";
+import { ensureDataDir, getDataDir } from "./data-dir";
 
 const PAIRING_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-const DATA_DIR = path.join(os.homedir(), ".papat");
-const TOKENS_FILE = path.join(DATA_DIR, "tokens.json");
+
+function tokensFile(): string {
+  return path.join(getDataDir(), "tokens.json");
+}
 
 interface StoredDevice {
   id: string;
@@ -39,8 +42,9 @@ function hashToken(token: string): string {
 
 function loadTokenStore(): void {
   try {
-    if (fs.existsSync(TOKENS_FILE)) {
-      tokenStore = JSON.parse(fs.readFileSync(TOKENS_FILE, "utf-8")) as TokenStore;
+    const file = tokensFile();
+    if (fs.existsSync(file)) {
+      tokenStore = JSON.parse(fs.readFileSync(file, "utf-8")) as TokenStore;
     }
   } catch {
     tokenStore = { devices: [] };
@@ -48,8 +52,8 @@ function loadTokenStore(): void {
 }
 
 function saveTokenStore(): void {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(TOKENS_FILE, JSON.stringify(tokenStore, null, 2), "utf-8");
+  ensureDataDir();
+  fs.writeFileSync(tokensFile(), JSON.stringify(tokenStore, null, 2), "utf-8");
 }
 
 export function initAuth(): void {

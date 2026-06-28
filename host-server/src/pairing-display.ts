@@ -14,11 +14,11 @@ export async function printPairingQr(): Promise<void> {
   }
   const payload = buildPairQrPayload(lanHost);
 
-  console.log("\n[PapaT Host] ── Pair your phone ──");
-  console.log(`[PapaT Host] Scan QR in the PapaT app, or enter manually:`);
-  console.log(`[PapaT Host]   Host: ${lanHost}`);
-  console.log(`[PapaT Host]   Port: ${config.port}`);
-  console.log(`[PapaT Host]   Code: ${pairing.code} (expires in ${Math.round(config.pairingTtlMs / 1000)}s)`);
+  console.log("\n[Titus Host] ── Pair your phone ──");
+  console.log(`[Titus Host] Scan QR in the Titus app, or enter manually:`);
+  console.log(`[Titus Host]   Host: ${lanHost}`);
+  console.log(`[Titus Host]   Port: ${config.port}`);
+  console.log(`[Titus Host]   Code: ${pairing.code} (expires in ${Math.round(config.pairingTtlMs / 1000)}s)`);
 
   try {
     const qr = await QRCode.toString(JSON.stringify(payload), {
@@ -27,10 +27,10 @@ export async function printPairingQr(): Promise<void> {
     });
     console.log(qr);
   } catch {
-    console.log(`[PapaT Host] QR payload: ${JSON.stringify(payload)}`);
+    console.log(`[Titus Host] QR payload: ${JSON.stringify(payload)}`);
   }
 
-  console.log("[PapaT Host] ───────────────────────\n");
+  console.log("[Titus Host] ───────────────────────\n");
 }
 
 export function startPairingRefreshTimer(): NodeJS.Timeout | null {

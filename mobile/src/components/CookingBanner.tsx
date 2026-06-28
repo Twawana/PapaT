@@ -153,7 +153,7 @@ export function CookingBanner({ visible, subtitle }: Props) {
         </View>
         <Text style={styles.emoji}>🍳</Text>
         <View style={styles.titleRow}>
-          <Text style={styles.title}>Papa T is Cooking</Text>
+          <Text style={styles.title}>Titus is Cooking</Text>
           <View style={styles.dots}>
             <Animated.Text style={[styles.dot, { opacity: dot1 }]}>.</Animated.Text>
             <Animated.Text style={[styles.dot, { opacity: dot2 }]}>.</Animated.Text>

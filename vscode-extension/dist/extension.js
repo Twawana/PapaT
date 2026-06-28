@@ -39,19 +39,26 @@ const vscode = __importStar(require("vscode"));
 const connection_1 = require("./connection");
 let connection = null;
 let statusBar = null;
+function getExtensionConfig() {
+    const titus = vscode.workspace.getConfiguration("titus");
+    if (titus.get("host") !== undefined || titus.get("port") !== undefined) {
+        return titus;
+    }
+    return vscode.workspace.getConfiguration("papat");
+}
 function activate(context) {
     statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     context.subscriptions.push(statusBar);
-    connection = new connection_1.PapaTConnection(statusBar, (command) => {
+    connection = new connection_1.TitusConnection(statusBar, (command) => {
         void (0, connection_1.handleVscodeCommand)(command);
     });
     context.subscriptions.push({ dispose: () => connection?.disconnect() });
-    context.subscriptions.push(vscode.commands.registerCommand("papat.connect", () => {
+    context.subscriptions.push(vscode.commands.registerCommand("titus.connect", () => {
         connection?.connect();
-    }), vscode.commands.registerCommand("papat.disconnect", () => {
+    }), vscode.commands.registerCommand("titus.disconnect", () => {
         connection?.disconnect();
-    }), vscode.commands.registerCommand("papat.showStatus", () => {
-        const text = statusBar?.text ?? "PapaT";
+    }), vscode.commands.registerCommand("titus.showStatus", () => {
+        const text = statusBar?.text ?? "Titus";
         void vscode.window.showInformationMessage(text);
     }));
     context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor((editor) => {
@@ -60,15 +67,13 @@ function activate(context) {
     context.subscriptions.push(vscode.workspace.onDidChangeWorkspaceFolders(() => {
         connection?.sendStatus(vscode.window.activeTextEditor?.document.uri.fsPath ?? null);
     }));
-    const autoConnect = vscode.workspace
-        .getConfiguration("papat")
-        .get("autoConnect", true);
+    const autoConnect = getExtensionConfig().get("autoConnect", true);
     if (autoConnect) {
         connection.connect();
     }
     else {
-        statusBar.text = "PapaT: offline";
-        statusBar.command = "papat.connect";
+        statusBar.text = "Titus: offline";
+        statusBar.command = "titus.connect";
         statusBar.show();
     }
 }

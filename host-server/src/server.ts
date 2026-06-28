@@ -145,12 +145,12 @@ export function createServer(): WebSocketServer {
   });
 
   console.log(
-    `[PapaT Host] Listening on ws://${config.host}:${config.port} (workspace: ${getWorkspaceRoot()})`
+    `[Titus Host] Listening on ws://${config.host}:${config.port} (workspace: ${getWorkspaceRoot()})`
   );
 
   wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
     const clientId = randomUUID().slice(0, 8);
-    console.log(`[PapaT Host] Client connected: ${clientId}`);
+    console.log(`[Titus Host] Client connected: ${clientId}`);
 
     if (isAuthRequired()) {
       send(ws, {
@@ -184,11 +184,11 @@ export function createServer(): WebSocketServer {
       clearShellSession(ws);
       unregisterVscodeClient(ws);
       clearClientAuth(ws);
-      console.log(`[PapaT Host] Client disconnected: ${clientId}`);
+      console.log(`[Titus Host] Client disconnected: ${clientId}`);
     });
 
     ws.on("error", (err) => {
-      console.error(`[PapaT Host] WebSocket error (${clientId}):`, err.message);
+      console.error(`[Titus Host] WebSocket error (${clientId}):`, err.message);
     });
   });
 
@@ -420,7 +420,7 @@ function handleExecute(
     return;
   }
 
-  console.log(`[PapaT Host] Executing ${id} (${language}, ${code.length} chars)`);
+  console.log(`[Titus Host] Executing ${id} (${language}, ${code.length} chars)`);
 
   executeCode(code, language as ExecuteLanguage, {
     onStdout: (data) => send(ws, { type: "output", id, stream: "stdout", data }),
@@ -497,7 +497,7 @@ function handleShellRun(
     return;
   }
 
-  console.log(`[PapaT Host] Shell ${id} (${session.shell}): ${command.trim().slice(0, 80)}`);
+  console.log(`[Titus Host] Shell ${id} (${session.shell}): ${command.trim().slice(0, 80)}`);
 
   const active = runShellCommandStreaming(command, session.cwd, {
     onStdout: (data) => send(ws, { type: "output", id, stream: "stdout", data }),
@@ -955,7 +955,7 @@ async function handleProjectOpen(
   try {
     const result = await openProject(folderPath, editor as "cursor" | "vscode" | undefined);
     console.log(
-      `[PapaT Host] Project opened: ${result.path}${editor ? ` (${editor})` : ""}`
+      `[Titus Host] Project opened: ${result.path}${editor ? ` (${editor})` : ""}`
     );
     send(ws, { type: "project_open_result", id, ...result });
   } catch (err) {
@@ -990,7 +990,7 @@ function handleAgentSend(
     return;
   }
 
-  console.log(`[PapaT Host] Agent message (${sessionId.slice(0, 8)}): ${userMessage.slice(0, 80)}`);
+  console.log(`[Titus Host] Agent message (${sessionId.slice(0, 8)}): ${userMessage.slice(0, 80)}`);
 
   void runAgentTurn(sessionId, userMessage.trim(), id, (message) => send(ws, message));
 }
@@ -1062,7 +1062,7 @@ function handleAuth(ws: WebSocket, token: string): void {
     deviceName: result.deviceName,
   });
 
-  console.log(`[PapaT Host] Authenticated: ${result.deviceName}`);
+  console.log(`[Titus Host] Authenticated: ${result.deviceName}`);
   send(ws, buildAuthOkMessage(result.deviceId, result.deviceName));
 }
 
@@ -1079,7 +1079,7 @@ function handlePair(ws: WebSocket, code: string, deviceName?: string): void {
       deviceName: result.deviceName,
     });
 
-    console.log(`[PapaT Host] Paired new device: ${result.deviceName}`);
+    console.log(`[Titus Host] Paired new device: ${result.deviceName}`);
     send(
       ws,
       buildAuthOkMessage(
@@ -1156,7 +1156,7 @@ function handleVscodeOpenFile(ws: WebSocket, id: string, filePath: string): void
       type: "vscode_open_file_result",
       id,
       ok: false,
-      message: "VS Code is not connected. Install the PapaT extension and open VS Code.",
+      message: "VS Code is not connected. Install the Titus extension and open VS Code.",
     });
     return;
   }

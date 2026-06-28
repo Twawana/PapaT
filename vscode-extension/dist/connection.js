@@ -36,14 +36,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.PapaTConnection = void 0;
+exports.TitusConnection = void 0;
 exports.handleVscodeCommand = handleVscodeCommand;
 const vscode = __importStar(require("vscode"));
 const ws_1 = __importDefault(require("ws"));
 const protocol_1 = require("./protocol");
 const EXTENSION_VERSION = "0.5.0";
 const RECONNECT_MS = 3000;
-class PapaTConnection {
+class TitusConnection {
     statusBar;
     onCommand;
     socket = null;
@@ -55,9 +55,10 @@ class PapaTConnection {
         this.onCommand = onCommand;
     }
     connect() {
-        const config = vscode.workspace.getConfiguration("papat");
-        const host = config.get("host", "127.0.0.1");
-        const port = config.get("port", 3847);
+        const titus = vscode.workspace.getConfiguration("titus");
+        const legacy = vscode.workspace.getConfiguration("papat");
+        const host = titus.get("host") ?? legacy.get("host", "127.0.0.1");
+        const port = titus.get("port") ?? legacy.get("port", 3847);
         const url = `ws://${host}:${port}`;
         this.intentionalClose = false;
         this.updateStatus("connecting", `Connecting to ${url}`);
@@ -65,7 +66,7 @@ class PapaTConnection {
         this.socket = socket;
         socket.on("open", () => {
             this.connected = true;
-            this.updateStatus("connecting", `PapaT: connecting (${host}:${port})`);
+            this.updateStatus("connecting", `Titus: connecting (${host}:${port})`);
         });
         socket.on("message", (data) => {
             const message = (0, protocol_1.parseServerMessage)(data.toString("utf-8"));
@@ -74,12 +75,12 @@ class PapaTConnection {
             }
             if (message.type === "auth_required") {
                 this.register();
-                this.updateStatus("connected", `PapaT: connected (${host}:${port})`);
+                this.updateStatus("connected", `Titus: connected (${host}:${port})`);
                 return;
             }
             if (message.type === "connected") {
                 this.register();
-                this.updateStatus("connected", `PapaT: connected (${host}:${port})`);
+                this.updateStatus("connected", `Titus: connected (${host}:${port})`);
                 return;
             }
             if (message.type === "vscode_command") {
@@ -90,14 +91,14 @@ class PapaTConnection {
             this.connected = false;
             this.socket = null;
             if (this.intentionalClose) {
-                this.updateStatus("disconnected", "PapaT: disconnected");
+                this.updateStatus("disconnected", "Titus: disconnected");
                 return;
             }
-            this.updateStatus("connecting", "PapaT: reconnecting...");
+            this.updateStatus("connecting", "Titus: reconnecting...");
             this.scheduleReconnect();
         });
         socket.on("error", () => {
-            this.updateStatus("error", "PapaT: host unreachable");
+            this.updateStatus("error", "Titus: host unreachable");
         });
     }
     disconnect() {
@@ -109,7 +110,7 @@ class PapaTConnection {
         this.socket?.close();
         this.socket = null;
         this.connected = false;
-        this.updateStatus("disconnected", "PapaT: disconnected");
+        this.updateStatus("disconnected", "Titus: disconnected");
     }
     isConnected() {
         return this.connected && this.socket?.readyState === ws_1.default.OPEN;
@@ -149,8 +150,8 @@ class PapaTConnection {
     }
     updateStatus(state, text) {
         this.statusBar.text = text;
-        this.statusBar.tooltip = "PapaT phone bridge";
-        this.statusBar.command = "papat.showStatus";
+        this.statusBar.tooltip = "Titus phone bridge";
+        this.statusBar.command = "titus.showStatus";
         if (state === "connected") {
             this.statusBar.backgroundColor = undefined;
             this.statusBar.color = undefined;
@@ -164,7 +165,7 @@ class PapaTConnection {
         this.statusBar.show();
     }
 }
-exports.PapaTConnection = PapaTConnection;
+exports.TitusConnection = TitusConnection;
 async function handleVscodeCommand(message) {
     const uri = vscode.Uri.file(message.path);
     switch (message.command) {

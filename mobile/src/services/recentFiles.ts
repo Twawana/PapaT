@@ -1,6 +1,6 @@
 import * as SecureStore from "expo-secure-store";
 
-const STORAGE_KEY = "papat_recent_files";
+const STORAGE_KEY = "titus_recent_files";
 const MAX_RECENT = 20;
 
 export interface RecentFile {

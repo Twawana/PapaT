@@ -8,9 +8,10 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { papatClient } from "../services/websocket";
+import { titusClient } from "../services/websocket";
 import { ServerMessage, ShellKind } from "../types/protocol";
 import { dismissKeyboard, keyboardPersistTaps } from "../utils/keyboard";
+import { useTabBarInset } from "../hooks/useTabBarInset";
 
 interface Props {
   isConnected: boolean;
@@ -56,6 +57,7 @@ export default function TerminalScreen({ isConnected, onError }: Props) {
   const activeShellId = useRef<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const promptCwd = useRef("");
+  const tabBarInset = useTabBarInset();
 
   const appendLine = useCallback((kind: TerminalLine["kind"], text: string) => {
     setLines((prev) => [
@@ -117,7 +119,7 @@ export default function TerminalScreen({ isConnected, onError }: Props) {
   );
 
   useEffect(() => {
-    return papatClient.addMessageListener(handleServerMessage);
+    return titusClient.addMessageListener(handleServerMessage);
   }, [handleServerMessage]);
 
   useEffect(() => {
@@ -154,7 +156,7 @@ export default function TerminalScreen({ isConnected, onError }: Props) {
     setCommand("");
 
     try {
-      papatClient.shellRun(id, trimmed, shell);
+      titusClient.shellRun(id, trimmed, shell);
       dismissKeyboard();
     } catch (err) {
       setIsRunning(false);
@@ -169,7 +171,7 @@ export default function TerminalScreen({ isConnected, onError }: Props) {
     const id = activeShellId.current;
     if (!id || !isRunning) return;
     try {
-      papatClient.shellCancel(id);
+      titusClient.shellCancel(id);
     } catch (err) {
       onError(err instanceof Error ? err.message : "Failed to cancel");
     }
@@ -294,7 +296,7 @@ export default function TerminalScreen({ isConnected, onError }: Props) {
         />
       </View>
 
-      <View style={styles.actions}>
+      <View style={[styles.actions, { marginBottom: tabBarInset }]}>
         <Pressable
           style={[styles.historyBtn, history.length === 0 && styles.btnDisabled]}
           onPress={() => recallHistory("up")}
@@ -330,7 +332,6 @@ export default function TerminalScreen({ isConnected, onError }: Props) {
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    marginBottom: 8,
   },
   header: {
     flexDirection: "row",

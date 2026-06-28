@@ -9,7 +9,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { papatClient } from "../services/websocket";
+import { titusClient } from "../services/websocket";
 import { RecentFile } from "../services/recentFiles";
 import { FileSearchHit } from "../types/protocol";
 import { dismissKeyboard, keyboardPersistTaps } from "../utils/keyboard";
@@ -40,10 +40,10 @@ export function QuickOpenModal({ visible, recentFiles, onClose, onOpen }: Props)
     }
 
     const timer = setTimeout(async () => {
-      if (!papatClient.isConnected()) return;
+      if (!titusClient.isConnected()) return;
       setLoading(true);
       try {
-        const result = await papatClient.searchFiles(trimmed, 40);
+        const result = await titusClient.searchFiles(trimmed, 40);
         setHits(result.hits);
       } catch {
         setHits([]);

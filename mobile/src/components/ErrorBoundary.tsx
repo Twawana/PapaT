@@ -21,7 +21,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo): void {
-    console.error(`[PapaT] UI error${this.props.title ? ` (${this.props.title})` : ""}`, error, info);
+    console.error(`[Titus] UI error${this.props.title ? ` (${this.props.title})` : ""}`, error, info);
     this.props.onError?.(error);
   }
 

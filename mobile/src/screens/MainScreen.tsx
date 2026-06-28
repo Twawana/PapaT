@@ -13,7 +13,6 @@ import { ConnectionBar } from "../components/ConnectionBar";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import {
   LiquidGlassTabBar,
-  tabBarInset,
 } from "../components/LiquidGlassTabBar";
 import { resolveTabLabel, TabId } from "../config/navigationTabs";
 import { KeyboardDismissView } from "../components/KeyboardDismissView";
@@ -25,7 +24,7 @@ import {
 } from "../utils/keyboard";
 import { useConnection } from "../hooks/useConnection";
 import { useNavigationTabs } from "../hooks/useNavigationTabs";
-import { papatClient } from "../services/websocket";
+import { titusClient } from "../services/websocket";
 
 interface EditorActions {
   openFile: (path: string) => Promise<void>;
@@ -139,11 +138,11 @@ export default function MainScreen() {
       if (!workspacePath) return;
 
       try {
-        const info = await papatClient.getWorkspace();
+        const info = await titusClient.getWorkspace();
         if (cancelled || info.path === workspacePath) {
           return;
         }
-        const result = await papatClient.openProject(workspacePath);
+        const result = await titusClient.openProject(workspacePath);
         if (cancelled) return;
         handleWorkspaceChange(result.path, result.name);
       } catch (err) {
@@ -167,9 +166,7 @@ export default function MainScreen() {
   ]);
 
   const keyboardVisible = useKeyboardVisible();
-  const contentInset = keyboardVisible
-    ? insets.bottom
-    : tabBarInset(insets.bottom);
+  const contentInset = keyboardVisible ? insets.bottom : 0;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -182,7 +179,7 @@ export default function MainScreen() {
       >
         <KeyboardDismissView style={styles.flex}>
         <Pressable style={styles.header} onPress={dismissKeyboard}>
-          <Text style={styles.title}>PapaT</Text>
+          <Text style={styles.title}>Titus</Text>
         </Pressable>
 
         <ConnectionBar

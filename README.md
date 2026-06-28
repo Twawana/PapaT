@@ -1,6 +1,6 @@
-# PapaT — Phone-as-PC Terminal
+# Titus — Phone-as-PC Terminal
 
-PapaT turns your phone into a remote coding environment. All computation runs on your PC; the phone is the interface.
+Titus turns your phone into a remote coding environment. All computation runs on your PC; the phone is the interface.
 
 ## Architecture
 
@@ -9,7 +9,7 @@ mobile/          React Native (Expo) app — code editor, file explorer, termina
 host-server/     Node.js WebSocket server — executes JS and manages workspace files on your PC
 ```
 
-The PC workspace (`PAPAT_WORKSPACE`) is the default file root. The mobile **Files** tab can also browse any allowed folder on your PC (home directory and drives), edit files in place, and create, rename, move, or delete files and folders.
+The PC workspace (`TITUS_WORKSPACE`) is the default file root. The mobile **Files** tab can also browse any allowed folder on your PC (home directory and drives), edit files in place, and create, rename, move, or delete files and folders.
 
 ## Quick Start
 
@@ -53,20 +53,22 @@ node scripts/test-client.js
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PAPAT_PORT` | `3847` | WebSocket port |
-| `PAPAT_HOST` | `0.0.0.0` | Bind address |
-| `PAPAT_WORKSPACE` | `./workspace` | File root + execution working directory |
-| `PAPAT_EXEC_TIMEOUT` | `30000` | Max execution time (ms) |
-| `PAPAT_MAX_FILE_SIZE` | `512000` | Max file read/write size (bytes) |
-| `PAPAT_COMMAND_TIMEOUT` | `60000` | Max shell command time (ms) |
-| `PAPAT_LLM_PROVIDER` | `cursor` | Agent backend: `cursor` (logged-in Cursor CLI) or `openai` |
-| `PAPAT_CURSOR_MODEL` | `auto` | Cursor model (`auto`, `composer-2.5`, etc.) |
+| `TITUS_PORT` | `3847` | WebSocket port |
+| `TITUS_HOST` | `0.0.0.0` | Bind address |
+| `TITUS_WORKSPACE` | `./workspace` | File root + execution working directory |
+| `TITUS_EXEC_TIMEOUT` | `30000` | Max execution time (ms) |
+| `TITUS_MAX_FILE_SIZE` | `512000` | Max file read/write size (bytes) |
+| `TITUS_COMMAND_TIMEOUT` | `60000` | Max shell command time (ms) |
+| `TITUS_LLM_PROVIDER` | `cursor` | Agent backend: `cursor` (logged-in Cursor CLI) or `openai` |
+| `TITUS_CURSOR_MODEL` | `auto` | Cursor model (`auto`, `composer-2.5`, etc.) |
 | `CURSOR_API_KEY` | — | Optional Cursor API key (otherwise uses `agent login` session) |
-| `OPENAI_API_KEY` | — | OpenAI API key (only if `PAPAT_LLM_PROVIDER=openai`) |
-| `PAPAT_LLM_MODEL` | `gpt-4o-mini` | OpenAI model when using OpenAI provider |
-| `PAPAT_AGENT_MAX_TURNS` | `15` | Max tool-calling loops per message (OpenAI provider only) |
-| `PAPAT_REQUIRE_AUTH` | `true` | Require QR pairing / device token for mobile clients |
-| `PAPAT_PAIRING_TTL_MS` | `120000` | Pairing code lifetime (ms); QR refreshes on host |
+| `OPENAI_API_KEY` | — | OpenAI API key (only if `TITUS_LLM_PROVIDER=openai`) |
+| `TITUS_LLM_MODEL` | `gpt-4o-mini` | OpenAI model when using OpenAI provider |
+| `TITUS_AGENT_MAX_TURNS` | `15` | Max tool-calling loops per message (OpenAI provider only) |
+| `TITUS_REQUIRE_AUTH` | `true` | Require QR pairing / device token for mobile clients |
+| `TITUS_PAIRING_TTL_MS` | `120000` | Pairing code lifetime (ms); QR refreshes on host |
+
+Legacy `PAPAT_*` environment variables are still accepted as fallbacks.
 
 ## Auth & QR Pairing (MVP 6)
 
@@ -75,7 +77,7 @@ By default, the host **requires authentication**. Unpaired clients cannot read f
 ### Pair your phone
 
 1. Start the host — a **QR code** prints in the terminal (refreshes every 2 minutes)
-2. Open the PapaT app → tap **Scan QR**
+2. Open the Titus app → tap **Scan QR**
 3. Point your camera at the QR on your PC
 4. Your phone is paired and receives a secure token stored in the device keychain
 
@@ -94,14 +96,14 @@ Then tap **Scan QR** is not needed — use the code from terminal with a future 
 ### Disable auth (development only)
 
 ```bash
-PAPAT_REQUIRE_AUTH=false npm start
+TITUS_REQUIRE_AUTH=false npm start
 ```
 
-Paired device tokens are stored in `%USERPROFILE%\.papat\tokens.json` on the PC.
+Paired device tokens are stored in `%USERPROFILE%\.titus\tokens.json` on the PC (legacy `.papat` data is read automatically if present).
 
 ## VS Code Integration (MVP 7)
 
-PapaT connects **directly to VS Code** through a companion extension. When linked:
+Titus connects **directly to VS Code** through a companion extension. When linked:
 
 - Your phone shows **VS Code linked** in the connection bar
 - **Open in VS Code** switches the workspace without launching a new window
@@ -110,23 +112,23 @@ PapaT connects **directly to VS Code** through a companion extension. When linke
 
 ### Install the VS Code extension
 
-1. Start the PapaT host on your PC (`host-server`)
-2. **Open the repo root** `PapaT` in VS Code or Cursor (not the `mobile` or `host-server` subfolder)
+1. Start the Titus host on your PC (`host-server`)
+2. **Open the repo root** in VS Code or Cursor (not the `mobile` or `host-server` subfolder)
 3. Build the extension:
    ```bash
    cd vscode-extension
    npm install
    npm run build
    ```
-4. **Run and Debug** → **PapaT VS Code Extension** → **F5**
+4. **Run and Debug** → **Titus VS Code Extension** → **F5**
 
    If you see *“Extension host did not start in 10 seconds”*:
    - Turn off **Stop on Entry** in the Debug toolbar (pause icon with a dot)
    - Remove breakpoints in `vscode-extension/src`
-   - Make sure the workspace folder is the **PapaT repo root**
+   - Make sure the workspace folder is the **Titus repo root**
    - Retry — the launch config waits up to 2 minutes and rebuilds first
 
-5. A **second window** opens with the extension loaded. The status bar shows **PapaT: connected** when linked to `ws://127.0.0.1:3847`
+5. A **second window** opens with the extension loaded. The status bar shows **Titus: connected** when linked to `ws://127.0.0.1:3847`
 
 **Without debugging (easier):** package and install a `.vsix`:
 ```bash
@@ -136,7 +138,7 @@ npx @vscode/vsce package
 ```
 Then in VS Code/Cursor: **Extensions** → **⋯** → **Install from VSIX…**
 
-Extension settings (`papat.host`, `papat.port`, `papat.autoConnect`) are in VS Code Settings.
+Extension settings (`titus.host`, `titus.port`, `titus.autoConnect`) are in VS Code Settings.
 
 ## AI Agent (MVP 4)
 
@@ -161,7 +163,7 @@ The **Agent** tab sends messages to your PC host, which runs the **Cursor CLI** 
    cd host-server && npm run build && npm start
    ```
 
-Optional: set `CURSOR_API_KEY` instead of `agent login` for automation. To use OpenAI instead, set `PAPAT_LLM_PROVIDER=openai` and `OPENAI_API_KEY`.
+Optional: set `CURSOR_API_KEY` instead of `agent login` for automation. To use OpenAI instead, set `TITUS_LLM_PROVIDER=openai` and `OPENAI_API_KEY`.
 
 ## Mobile IDE (Code tab)
 
@@ -203,7 +205,7 @@ Execute supports `javascript`, `typescript`, `python`, and `shell` via the `exec
 
 ## File System Protocol (MVP 2)
 
-All paths are relative to `PAPAT_WORKSPACE`. The mobile app syncs on demand (list/read/write/delete over WebSocket).
+All paths are relative to `TITUS_WORKSPACE`. The mobile app syncs on demand (list/read/write/delete over WebSocket).
 
 | Client message | Server response |
 |----------------|-----------------|

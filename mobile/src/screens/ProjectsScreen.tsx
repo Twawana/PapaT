@@ -8,7 +8,8 @@ import {
   Text,
   View,
 } from "react-native";
-import { papatClient } from "../services/websocket";
+import { useTabBarInset } from "../hooks/useTabBarInset";
+import { titusClient } from "../services/websocket";
 import { BrowseEntry, BrowseRoot, EditorId, RecentFolder } from "../types/protocol";
 
 interface Props {
@@ -46,13 +47,14 @@ export default function ProjectsScreen({
   const [browseEntries, setBrowseEntries] = useState<BrowseEntry[]>([]);
   const [browseRoots, setBrowseRoots] = useState<BrowseRoot[]>([]);
   const [browseLoading, setBrowseLoading] = useState(false);
+  const tabBarInset = useTabBarInset();
 
   const loadRecent = useCallback(async () => {
     if (!isConnected) return;
 
     setLoading(true);
     try {
-      const result = await papatClient.getWorkspaceRecent();
+      const result = await titusClient.getWorkspaceRecent();
       setRecent(result.recent);
       setSelectedPath((prev) => prev ?? result.current);
       const currentName =
@@ -85,7 +87,7 @@ export default function ProjectsScreen({
   const openProject = async (path: string, editor?: EditorId) => {
     try {
       setOpening(editor ?? "workspace");
-      const result = await papatClient.openProject(path, editor);
+      const result = await titusClient.openProject(path, editor);
       setSelectedPath(result.path);
       onWorkspaceChange(result.path, result.name);
       await loadRecent();
@@ -107,11 +109,11 @@ export default function ProjectsScreen({
     setBrowseLoading(true);
 
     try {
-      const roots = await papatClient.getBrowseRoots();
+      const roots = await titusClient.getBrowseRoots();
       setBrowseRoots(roots.roots);
       const first = roots.roots[0]?.path;
       if (first) {
-        const listing = await papatClient.browseList(first);
+        const listing = await titusClient.browseList(first);
         setBrowsePath(listing.path);
         setBrowseEntries(listing.entries);
       }
@@ -126,7 +128,7 @@ export default function ProjectsScreen({
   const enterBrowseFolder = async (path: string) => {
     setBrowseLoading(true);
     try {
-      const listing = await papatClient.browseList(path);
+      const listing = await titusClient.browseList(path);
       setBrowsePath(listing.path);
       setBrowseEntries(listing.entries);
     } catch (err) {
@@ -170,7 +172,7 @@ export default function ProjectsScreen({
           <Text style={styles.vscodeBadge}>VS Code linked on your PC</Text>
         ) : isConnected ? (
           <Text style={styles.vscodeHint}>
-            Install the PapaT VS Code extension to link your editor
+            Install the Titus VS Code extension to link your editor
           </Text>
         ) : null}
         {selectedPath ? (
@@ -236,6 +238,8 @@ export default function ProjectsScreen({
         <FlatList
           data={recent}
           keyExtractor={(item) => item.path}
+          style={styles.list}
+          contentContainerStyle={{ paddingBottom: tabBarInset }}
           ListEmptyComponent={
             <Text style={styles.empty}>
               {isConnected
@@ -329,6 +333,9 @@ export default function ProjectsScreen({
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  list: {
     flex: 1,
   },
   currentCard: {

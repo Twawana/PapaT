@@ -1,9 +1,9 @@
 {
-  "name": "papat-vscode",
-  "displayName": "PapaT",
-  "description": "Connect VS Code to PapaT phone-as-PC terminal",
+  "name": "titus-vscode",
+  "displayName": "Titus",
+  "description": "Connect VS Code to Titus phone-as-PC terminal",
   "version": "0.5.0",
-  "publisher": "papat",
+  "publisher": "titus",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -15,37 +15,37 @@
   "contributes": {
     "commands": [
       {
-        "command": "papat.connect",
-        "title": "PapaT: Connect to Host"
+        "command": "titus.connect",
+        "title": "Titus: Connect to Host"
       },
       {
-        "command": "papat.disconnect",
-        "title": "PapaT: Disconnect"
+        "command": "titus.disconnect",
+        "title": "Titus: Disconnect"
       },
       {
-        "command": "papat.showStatus",
-        "title": "PapaT: Show Connection Status"
+        "command": "titus.showStatus",
+        "title": "Titus: Show Connection Status"
       }
     ],
     "configuration": {
-      "title": "PapaT",
+      "title": "Titus",
       "properties": {
-        "papat.host": {
+        "titus.host": {
           "type": "string",
           "default": "127.0.0.1",
-          "description": "PapaT host server address"
+          "description": "Titus host server address"
         },
-        "papat.port": {
+        "titus.port": {
           "type": "number",
           "default": 3847,
-          "description": "PapaT host WebSocket port"
+          "description": "Titus host WebSocket port"
         },
-        "papat.autoConnect": {
+        "titus.autoConnect": {
           "type": "boolean",
           "default": true,
-          "description": "Connect to PapaT host when VS Code starts"
+          "description": "Connect to Titus host when VS Code starts"
         },
-        "papat.openFilesOnSave": {
+        "titus.openFilesOnSave": {
           "type": "boolean",
           "default": true,
           "description": "Focus files in VS Code when the phone saves them"

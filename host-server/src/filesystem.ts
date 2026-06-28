@@ -8,7 +8,9 @@ import {
 } from "./path-utils";
 import { getWorkspaceRoot } from "./workspace-state";
 
-const MAX_FILE_BYTES = Number(process.env.PAPAT_MAX_FILE_SIZE) || 512_000;
+import { config } from "./config";
+
+const MAX_FILE_BYTES = config.maxFileBytes;
 
 export async function listDirectory(clientPath: string): Promise<FileEntry[]> {
   const absolutePath = resolveFsPath(clientPath);

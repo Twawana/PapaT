@@ -1,7 +1,7 @@
 import * as SecureStore from "expo-secure-store";
 import { DEFAULT_TAB_ID, isTabId, TabId } from "../config/navigationTabs";
 
-const ACTIVE_TAB_KEY = "papat.nav.activeTab";
+const ACTIVE_TAB_KEY = "titus.nav.activeTab";
 
 export async function loadActiveTab(): Promise<TabId> {
   try {

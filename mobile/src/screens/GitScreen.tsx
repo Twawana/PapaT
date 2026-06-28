@@ -12,8 +12,9 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { papatClient } from "../services/websocket";
+import { titusClient } from "../services/websocket";
 import { dismissKeyboard, keyboardPersistTaps } from "../utils/keyboard";
+import { useTabBarInset } from "../hooks/useTabBarInset";
 import { GitFileStatus, GitStatusResult } from "../types/protocol";
 
 interface Props {
@@ -46,6 +47,7 @@ export default function GitScreen({ isConnected, onError, onOpenFile }: Props) {
   const [committing, setCommitting] = useState(false);
   const [branchModalVisible, setBranchModalVisible] = useState(false);
   const [newBranchName, setNewBranchName] = useState("my-feature");
+  const tabBarInset = useTabBarInset();
 
   const loadStatus = useCallback(
     async (isRefresh = false) => {
@@ -58,7 +60,7 @@ export default function GitScreen({ isConnected, onError, onOpenFile }: Props) {
       else setLoading(true);
 
       try {
-        const result = await papatClient.gitStatus();
+        const result = await titusClient.gitStatus();
         setStatus(result.status);
         onError(null);
       } catch (err) {
@@ -102,7 +104,7 @@ export default function GitScreen({ isConnected, onError, onOpenFile }: Props) {
 
   const showDiff = async (path?: string) => {
     try {
-      const result = await papatClient.gitDiff(path);
+      const result = await titusClient.gitDiff(path);
       setOutputTitle(path ? `Diff: ${path}` : "Diff");
       setOutputText(result.diff);
       onError(null);
@@ -113,7 +115,7 @@ export default function GitScreen({ isConnected, onError, onOpenFile }: Props) {
 
   const stageAll = async () => {
     try {
-      await papatClient.gitAdd();
+      await titusClient.gitAdd();
       await loadStatus(true);
       onError(null);
     } catch (err) {
@@ -123,7 +125,7 @@ export default function GitScreen({ isConnected, onError, onOpenFile }: Props) {
 
   const stageFile = async (path: string) => {
     try {
-      await papatClient.gitAdd([path]);
+      await titusClient.gitAdd([path]);
       await loadStatus(true);
       onError(null);
     } catch (err) {
@@ -138,7 +140,7 @@ export default function GitScreen({ isConnected, onError, onOpenFile }: Props) {
     }
     setCommitting(true);
     try {
-      const result = await papatClient.gitCommit(commitMessage.trim());
+      const result = await titusClient.gitCommit(commitMessage.trim());
       setCommitMessage("");
       showOutput("Commit", result.output);
       await loadStatus(true);
@@ -158,7 +160,7 @@ export default function GitScreen({ isConnected, onError, onOpenFile }: Props) {
         { text: "Cancel", style: "cancel" },
         {
           text: "Merge",
-          onPress: () => void runAction("Merge main", () => papatClient.gitMerge("main")),
+          onPress: () => void runAction("Merge main", () => titusClient.gitMerge("main")),
         },
       ]
     );
@@ -172,7 +174,7 @@ export default function GitScreen({ isConnected, onError, onOpenFile }: Props) {
     }
     setBranchModalVisible(false);
     dismissKeyboard();
-    await runAction(`Branch ${name}`, () => papatClient.gitCheckout(name, true));
+    await runAction(`Branch ${name}`, () => titusClient.gitCheckout(name, true));
   };
 
   if (!isConnected) {
@@ -204,8 +206,8 @@ export default function GitScreen({ isConnected, onError, onOpenFile }: Props) {
   }
 
   const actions = [
-    { id: "pull", label: "Pull", run: () => runAction("Pull", () => papatClient.gitPull()) },
-    { id: "push", label: "Push", run: () => runAction("Push", () => papatClient.gitPush()) },
+    { id: "pull", label: "Pull", run: () => runAction("Pull", () => titusClient.gitPull()) },
+    { id: "push", label: "Push", run: () => runAction("Push", () => titusClient.gitPush()) },
     {
       id: "branch",
       label: "New branch",
@@ -217,12 +219,12 @@ export default function GitScreen({ isConnected, onError, onOpenFile }: Props) {
     {
       id: "log",
       label: "Log",
-      run: () => runAction("Log", () => papatClient.gitLog(10)),
+      run: () => runAction("Log", () => titusClient.gitLog(10)),
     },
     {
       id: "stash",
       label: "Stash",
-      run: () => runAction("Stash", () => papatClient.gitStash()),
+      run: () => runAction("Stash", () => titusClient.gitStash()),
     },
     { id: "merge", label: "Merge main", run: confirmMergeMain },
   ] as const;
@@ -269,6 +271,7 @@ export default function GitScreen({ isConnected, onError, onOpenFile }: Props) {
         style={styles.list}
         data={status.files}
         keyExtractor={(item) => item.path}
+        contentContainerStyle={{ paddingBottom: 8 }}
         keyboardShouldPersistTaps={keyboardPersistTaps}
         keyboardDismissMode="on-drag"
         onScrollBeginDrag={dismissKeyboard}
@@ -293,7 +296,7 @@ export default function GitScreen({ isConnected, onError, onOpenFile }: Props) {
         ListEmptyComponent={<Text style={styles.hint}>No changes</Text>}
       />
 
-      <View style={styles.commitBox}>
+      <View style={[styles.commitBox, { marginBottom: tabBarInset }]}>
         <TextInput
           style={styles.commitInput}
           value={commitMessage}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Platform } from "react-native";
-import { papatClient } from "../services/websocket";
+import { titusClient } from "../services/websocket";
 import {
   clearCredentials,
   loadCredentials,
@@ -37,7 +37,7 @@ export function useConnection() {
         setIsPaired(true);
       })
       .catch((err) => {
-        console.error("[PapaT] Failed to load saved credentials", err);
+        console.error("[Titus] Failed to load saved credentials", err);
       });
   }, []);
 
@@ -53,7 +53,7 @@ export function useConnection() {
   );
 
   useEffect(() => {
-    const removeStatus = papatClient.addStatusListener((status, detail) => {
+    const removeStatus = titusClient.addStatusListener((status, detail) => {
       if (status === "open" && detail === "connecting") {
         setConnectionStatus("connecting");
         setServerInfo(null);
@@ -69,9 +69,9 @@ export function useConnection() {
       }
     });
 
-    const removeMessage = papatClient.addMessageListener((message) => {
+    const removeMessage = titusClient.addMessageListener((message) => {
       if (message.type === "auth_ok") {
-        const { host: connectHost, port: connectPort } = papatClient.getConnectTarget();
+        const { host: connectHost, port: connectPort } = titusClient.getConnectTarget();
         applySession(message.hostname, message.version, message.workspace, message.deviceName);
         setVscodeConnected(message.vscode?.connected ?? false);
         setHost(connectHost);
@@ -86,7 +86,7 @@ export function useConnection() {
             port: String(connectPort),
             deviceName: message.deviceName,
           }).catch((err) => {
-            console.error("[PapaT] Failed to save credentials", err);
+            console.error("[Titus] Failed to save credentials", err);
           });
         }
       }
@@ -133,7 +133,7 @@ export function useConnection() {
         return;
       }
 
-      papatClient.connect(host, portNum, {
+      titusClient.connect(host, portNum, {
         token: options.token,
         pairingCode: options.pairingCode,
         deviceName: Platform.OS === "ios" ? "iPhone" : "Android",
@@ -158,7 +158,7 @@ export function useConnection() {
       setError(null);
       setConnectionStatus("connecting");
       setSavedToken(null);
-      papatClient.connect(qrHost, qrPort, {
+      titusClient.connect(qrHost, qrPort, {
         pairingCode: code.trim().toUpperCase(),
         deviceName: Platform.OS === "ios" ? "iPhone" : "Android",
       });
@@ -183,7 +183,7 @@ export function useConnection() {
         setConnectionStatus("error");
         return;
       }
-      papatClient.connect(host, portNum, {
+      titusClient.connect(host, portNum, {
         pairingCode: trimmed,
         deviceName: Platform.OS === "ios" ? "iPhone" : "Android",
       });
@@ -192,13 +192,13 @@ export function useConnection() {
   );
 
   const handleDisconnect = useCallback(() => {
-    papatClient.disconnect();
+    titusClient.disconnect();
     setConnectionStatus("disconnected");
     setServerInfo(null);
   }, []);
 
   const handleForgetDevice = useCallback(async () => {
-    papatClient.disconnect();
+    titusClient.disconnect();
     try {
       await clearCredentials();
       setSavedToken(null);

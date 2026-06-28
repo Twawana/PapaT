@@ -5,7 +5,7 @@ import React, {
   useMemo,
   useState,
 } from "react";
-import { papatClient } from "../services/websocket";
+import { titusClient } from "../services/websocket";
 import {
   enqueueWrite,
   flushOfflineQueue,
@@ -92,7 +92,7 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
       setTabs((prev) => [...prev, placeholder]);
       setActivePath(path);
 
-      if (!papatClient.isConnected()) {
+      if (!titusClient.isConnected()) {
         setTabs((prev) =>
           prev.map((tab) =>
             tab.path === path
@@ -104,7 +104,7 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        const result = await papatClient.readFile(path);
+        const result = await titusClient.readFile(path);
         const recent = await touchRecentFile(path);
         setRecentFiles(recent);
         setTabs((prev) =>
@@ -152,7 +152,7 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
     const tab = tabs.find((item) => item.path === targetPath);
     if (!tab || tab.content === tab.savedContent) return;
 
-    if (!papatClient.isConnected()) {
+    if (!titusClient.isConnected()) {
       enqueueWrite(targetPath, tab.content, false);
       setPendingWrites(getQueuedWrites().length);
       setTabs((prev) =>
@@ -163,7 +163,7 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    await papatClient.writeFile(targetPath, tab.content, false);
+    await titusClient.writeFile(targetPath, tab.content, false);
     setTabs((prev) =>
       prev.map((item) =>
         item.path === targetPath

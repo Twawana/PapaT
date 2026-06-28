@@ -111,6 +111,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     paddingHorizontal: 18,
+    zIndex: 10,
   },
   shadowWrap: {
     borderRadius: 34,

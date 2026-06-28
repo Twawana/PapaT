@@ -18,7 +18,7 @@ export async function runSafely<T>(
   } catch (error) {
     const message = errorMessage(error);
     onError?.(message);
-    console.error("[PapaT]", message, error);
+    console.error("[Titus]", message, error);
     return fallback;
   }
 }
@@ -33,7 +33,7 @@ export function runSyncSafely<T>(
   } catch (error) {
     const message = errorMessage(error);
     onError?.(message);
-    console.error("[PapaT]", message, error);
+    console.error("[Titus]", message, error);
     return fallback;
   }
 }

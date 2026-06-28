@@ -1,4 +1,4 @@
-import { papatClient } from "./websocket";
+import { titusClient } from "./websocket";
 
 export interface QueuedWrite {
   id: string;
@@ -32,7 +32,7 @@ export function clearQueuedWrites(): void {
 }
 
 export async function flushOfflineQueue(): Promise<{ ok: number; failed: number }> {
-  if (flushing || !papatClient.isConnected() || queue.length === 0) {
+  if (flushing || !titusClient.isConnected() || queue.length === 0) {
     return { ok: 0, failed: 0 };
   }
 
@@ -40,10 +40,10 @@ export async function flushOfflineQueue(): Promise<{ ok: number; failed: number 
   let ok = 0;
   let failed = 0;
 
-  while (queue.length > 0 && papatClient.isConnected()) {
+  while (queue.length > 0 && titusClient.isConnected()) {
     const item = queue[0]!;
     try {
-      await papatClient.writeFile(item.path, item.content, item.create);
+      await titusClient.writeFile(item.path, item.content, item.create);
       queue.shift();
       ok += 1;
     } catch {

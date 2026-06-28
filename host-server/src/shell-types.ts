@@ -8,7 +8,7 @@ export function defaultShellKind(): ShellKind {
   if (process.platform !== "win32") {
     return "cmd";
   }
-  const env = (process.env.PAPAT_SHELL ?? "cmd").toLowerCase();
+  const env = (process.env.TITUS_SHELL ?? process.env.PAPAT_SHELL ?? "cmd").toLowerCase();
   return env === "powershell" || env === "pwsh" ? "powershell" : "cmd";
 }
 

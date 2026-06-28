@@ -19,7 +19,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <ErrorBoundary title="PapaT">
+      <ErrorBoundary title="Titus">
         {globalError ? (
           <GlobalErrorBanner
             message={globalError}

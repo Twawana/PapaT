@@ -8,14 +8,14 @@ import {
   View,
 } from "react-native";
 import { TerminalOutput } from "../components/TerminalOutput";
-import { papatClient } from "../services/websocket";
+import { titusClient } from "../services/websocket";
 import {
   ExecutionState,
   ServerMessage,
 } from "../types/protocol";
 
 const DEFAULT_CODE = `// Write JavaScript and press Run
-console.log("Hello from PapaT!");
+console.log("Hello from Titus!");
 console.log("2 + 2 =", 2 + 2);
 `;
 
@@ -85,7 +85,7 @@ export default function HomeScreen({ isConnected, onError }: Props) {
   );
 
   useEffect(() => {
-    return papatClient.addMessageListener(handleServerMessage);
+    return titusClient.addMessageListener(handleServerMessage);
   }, [handleServerMessage]);
 
   const handleRun = () => {
@@ -100,7 +100,7 @@ export default function HomeScreen({ isConnected, onError }: Props) {
     onError(null);
 
     try {
-      papatClient.execute(id, code);
+      titusClient.execute(id, code);
     } catch (err) {
       setExecution((prev) => ({ ...prev, isRunning: false }));
       onError(err instanceof Error ? err.message : "Failed to execute");

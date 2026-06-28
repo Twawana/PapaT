@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as Haptics from "expo-haptics";
-import { papatClient } from "../services/websocket";
+import { titusClient } from "../services/websocket";
 import {
   createSessionId,
   loadActiveSessionId,
@@ -103,7 +103,7 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
     try {
       await saveSessions(nextSessions);
     } catch (err) {
-      console.error("[PapaT] Failed to persist chat sessions", err);
+      console.error("[Titus] Failed to persist chat sessions", err);
     }
   }, []);
 
@@ -111,7 +111,7 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
     if (!isConnected) return;
 
     try {
-      const result = await papatClient.getAgentHistory(sessionId);
+      const result = await titusClient.getAgentHistory(sessionId);
       if (sessionId === sessionIdRef.current) {
         setMessages(safeHistoryToUi(result.messages));
       }
@@ -131,7 +131,7 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
     }
 
     try {
-      const result = await papatClient.listAgentSessions();
+      const result = await titusClient.listAgentSessions();
       const merged = mergeSessionLists(local, result.sessions);
       await persistSessions(merged);
       return merged;
@@ -160,7 +160,7 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
         setSessions(savedSessions);
         sessionsLoadedRef.current = true;
       } catch (err) {
-        console.error("[PapaT] Failed to load chat sessions", err);
+        console.error("[Titus] Failed to load chat sessions", err);
         if (!cancelled) {
           sessionsLoadedRef.current = true;
         }
@@ -302,7 +302,7 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
   );
 
   useEffect(() => {
-    const removeListener = papatClient.addMessageListener((message) => {
+    const removeListener = titusClient.addMessageListener((message) => {
       runSyncSafely(
         () => handleAgentMessage(message),
         undefined,
@@ -364,7 +364,7 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
     setInput("");
 
     try {
-      papatClient.sendAgentMessage(sessionId, text);
+      titusClient.sendAgentMessage(sessionId, text);
       setIsRunning(true);
     } catch (err) {
       setMessages((prev) => [
@@ -381,7 +381,7 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
 
   const cancel = useCallback(() => {
     try {
-      papatClient.cancelAgent(sessionIdRef.current);
+      titusClient.cancelAgent(sessionIdRef.current);
     } catch (err) {
       onError?.(errorMessage(err, "Failed to cancel agent"));
     }
@@ -394,7 +394,7 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
     const sessionId = sessionIdRef.current;
 
     try {
-      await papatClient.clearAgentHistory(sessionId);
+      await titusClient.clearAgentHistory(sessionId);
     } catch {
       // Local reset still applies
     }

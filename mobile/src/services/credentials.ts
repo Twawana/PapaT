@@ -1,9 +1,14 @@
 import * as SecureStore from "expo-secure-store";
 
-const TOKEN_KEY = "papat.auth.token";
-const HOST_KEY = "papat.auth.host";
-const PORT_KEY = "papat.auth.port";
-const DEVICE_NAME_KEY = "papat.auth.deviceName";
+const TOKEN_KEY = "titus.auth.token";
+const HOST_KEY = "titus.auth.host";
+const PORT_KEY = "titus.auth.port";
+const DEVICE_NAME_KEY = "titus.auth.deviceName";
+
+const LEGACY_TOKEN_KEY = "papat.auth.token";
+const LEGACY_HOST_KEY = "papat.auth.host";
+const LEGACY_PORT_KEY = "papat.auth.port";
+const LEGACY_DEVICE_NAME_KEY = "papat.auth.deviceName";
 
 export interface SavedCredentials {
   token: string;
@@ -12,15 +17,21 @@ export interface SavedCredentials {
   deviceName?: string;
 }
 
+async function readStoredItem(primary: string, legacy: string): Promise<string | null> {
+  const value = await SecureStore.getItemAsync(primary);
+  if (value) return value;
+  return SecureStore.getItemAsync(legacy);
+}
+
 export async function loadCredentials(): Promise<SavedCredentials | null> {
   try {
-    const token = await SecureStore.getItemAsync(TOKEN_KEY);
-    const host = await SecureStore.getItemAsync(HOST_KEY);
-    const port = await SecureStore.getItemAsync(PORT_KEY);
+    const token = await readStoredItem(TOKEN_KEY, LEGACY_TOKEN_KEY);
+    const host = await readStoredItem(HOST_KEY, LEGACY_HOST_KEY);
+    const port = await readStoredItem(PORT_KEY, LEGACY_PORT_KEY);
     if (!token || !host || !port) {
       return null;
     }
-    const deviceName = await SecureStore.getItemAsync(DEVICE_NAME_KEY);
+    const deviceName = await readStoredItem(DEVICE_NAME_KEY, LEGACY_DEVICE_NAME_KEY);
     return { token, host, port, deviceName: deviceName ?? undefined };
   } catch {
     return null;
@@ -41,6 +52,10 @@ export async function clearCredentials(): Promise<void> {
   await SecureStore.deleteItemAsync(HOST_KEY);
   await SecureStore.deleteItemAsync(PORT_KEY);
   await SecureStore.deleteItemAsync(DEVICE_NAME_KEY);
+  await SecureStore.deleteItemAsync(LEGACY_TOKEN_KEY);
+  await SecureStore.deleteItemAsync(LEGACY_HOST_KEY);
+  await SecureStore.deleteItemAsync(LEGACY_PORT_KEY);
+  await SecureStore.deleteItemAsync(LEGACY_DEVICE_NAME_KEY);
 }
 
 export interface PairQrPayload {

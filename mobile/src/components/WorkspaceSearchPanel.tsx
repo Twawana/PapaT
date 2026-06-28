@@ -8,7 +8,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { papatClient } from "../services/websocket";
+import { titusClient } from "../services/websocket";
 import { GrepHit } from "../types/protocol";
 
 interface Props {
@@ -22,11 +22,11 @@ export function WorkspaceSearchPanel({ onOpen }: Props) {
 
   const runSearch = async () => {
     const trimmed = query.trim();
-    if (!trimmed || !papatClient.isConnected()) return;
+    if (!trimmed || !titusClient.isConnected()) return;
 
     setLoading(true);
     try {
-      const result = await papatClient.grepWorkspace(trimmed, 60);
+      const result = await titusClient.grepWorkspace(trimmed, 60);
       setHits(result.hits);
     } catch {
       setHits([]);

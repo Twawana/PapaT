@@ -18,7 +18,8 @@ import { QuickOpenModal } from "../components/QuickOpenModal";
 import { TerminalOutput } from "../components/TerminalOutput";
 import { WorkspaceSearchPanel } from "../components/WorkspaceSearchPanel";
 import { editorModeFromPath, useEditor } from "../context/EditorContext";
-import { papatClient } from "../services/websocket";
+import { useTabBarInset } from "../hooks/useTabBarInset";
+import { titusClient } from "../services/websocket";
 import { snippetsForLanguage } from "../services/snippets";
 import {
   DiagnosticItem,
@@ -52,6 +53,7 @@ export default function CodeScreen({
 }: Props) {
   const editor = useEditor();
   const editorRef = useRef<CodeEditorHandle>(null);
+  const tabBarInset = useTabBarInset();
 
   const [quickOpen, setQuickOpen] = useState(false);
   const [findVisible, setFindVisible] = useState(false);
@@ -108,12 +110,12 @@ export default function CodeScreen({
   );
 
   useEffect(() => {
-    return papatClient.addMessageListener(handleServerMessage);
+    return titusClient.addMessageListener(handleServerMessage);
   }, [handleServerMessage]);
 
   useEffect(() => {
     if (!isConnected) return;
-    void papatClient.listScripts().then((result) => setScripts(result.scripts)).catch(() => {});
+    void titusClient.listScripts().then((result) => setScripts(result.scripts)).catch(() => {});
     void editor.flushPendingWrites();
   }, [isConnected, editor]);
 
@@ -130,7 +132,7 @@ export default function CodeScreen({
     onError(null);
 
     try {
-      papatClient.execute(id, activeFile.content, activeFile.runLanguage);
+      titusClient.execute(id, activeFile.content, activeFile.runLanguage);
     } catch (err) {
       setExecution((prev) => ({ ...prev, isRunning: false }));
       onError(err instanceof Error ? err.message : "Failed to execute");
@@ -146,7 +148,7 @@ export default function CodeScreen({
     activeExecutionId.current = id;
     setBottomPanel("output");
     setExecution({ id, output: "", isRunning: true, exitCode: null });
-    papatClient.shellRun(id, `npm run ${script.name}`);
+    titusClient.shellRun(id, `npm run ${script.name}`);
   };
 
   const handleDiagnostics = async () => {
@@ -157,7 +159,7 @@ export default function CodeScreen({
     setBottomPanel("problems");
     setDiagLoading(true);
     try {
-      const result = await papatClient.runDiagnostics();
+      const result = await titusClient.runDiagnostics();
       setDiagnostics(result.items);
       onError(null);
     } catch (err) {
@@ -390,7 +392,7 @@ export default function CodeScreen({
         ))}
       </View>
 
-      <View style={styles.bottomPanel}>
+      <View style={[styles.bottomPanel, { marginBottom: tabBarInset }]}>
         {bottomPanel === "output" ? (
           <TerminalOutput
             output={execution.output}

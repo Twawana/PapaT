@@ -169,11 +169,11 @@ async function runCursorAgentTurn(
 
     emit({ type: "agent_done", id: requestId, sessionId });
     console.log(
-      `[PapaT Host] Agent done (${sessionId.slice(0, 8)}): ${finalContent.slice(0, 120)}`
+      `[Titus Host] Agent done (${sessionId.slice(0, 8)}): ${finalContent.slice(0, 120)}`
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Agent failed";
-    console.error(`[PapaT Host] Agent error (${sessionId.slice(0, 8)}): ${message}`);
+    console.error(`[Titus Host] Agent error (${sessionId.slice(0, 8)}): ${message}`);
     emit({ type: "agent_error", id: requestId, sessionId, message });
   } finally {
     setSessionChild(sessionId, null);

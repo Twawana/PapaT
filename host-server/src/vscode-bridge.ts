@@ -51,7 +51,7 @@ export function registerVscodeClient(
     activeFile: null,
   };
   console.log(
-    `[PapaT Host] VS Code connected (${vscodeStatus.workspaceFolders.length} folder(s))`
+    `[Titus Host] VS Code connected (${vscodeStatus.workspaceFolders.length} folder(s))`
   );
   broadcastVscodeStatus();
 }
@@ -67,7 +67,7 @@ export function unregisterVscodeClient(ws: WebSocket): void {
     workspaceFolders: [],
     activeFile: null,
   };
-  console.log("[PapaT Host] VS Code disconnected");
+  console.log("[Titus Host] VS Code disconnected");
   broadcastVscodeStatus();
 }
 

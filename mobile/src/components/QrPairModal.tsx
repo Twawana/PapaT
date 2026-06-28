@@ -25,7 +25,7 @@ export function QrPairModal({ visible, onClose, onScanned, onError }: Props) {
 
     const payload = parsePairQrData(data);
     if (!payload) {
-      onError("Invalid PapaT QR code");
+      onError("Invalid Titus QR code");
       return;
     }
 
@@ -51,7 +51,7 @@ export function QrPairModal({ visible, onClose, onScanned, onError }: Props) {
         </View>
 
         <Text style={styles.hint}>
-          Point your camera at the QR code shown in the PapaT host terminal on your PC.
+          Point your camera at the QR code shown in the Titus host terminal on your PC.
         </Text>
 
         {!permission?.granted ? (
