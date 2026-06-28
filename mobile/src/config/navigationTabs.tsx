@@ -1,11 +1,12 @@
 import React from "react";
 import AgentScreen from "../screens/AgentScreen";
+import CodeScreen from "../screens/CodeScreen";
 import FilesScreen from "../screens/FilesScreen";
-import HomeScreen from "../screens/HomeScreen";
+import GitScreen from "../screens/GitScreen";
 import ProjectsScreen from "../screens/ProjectsScreen";
 import TerminalScreen from "../screens/TerminalScreen";
 
-export type TabId = "open" | "agent" | "terminal" | "code" | "files";
+export type TabId = "open" | "agent" | "terminal" | "code" | "files" | "git";
 
 export interface NavigationContext {
   isConnected: boolean;
@@ -14,6 +15,8 @@ export interface NavigationContext {
   workspaceName: string;
   onWorkspaceChange: (path: string, name: string) => void;
   onError: (message: string | null) => void;
+  onOpenInEditor: (path: string) => void;
+  selectTab: (tab: TabId) => void;
 }
 
 export interface NavigationTabConfig {
@@ -41,10 +44,18 @@ const ALL_TABS: NavigationTabConfig[] = [
   },
   {
     id: "agent",
-    label: "Agent",
+    label: (ctx) =>
+      ctx.workspaceName && ctx.workspaceName !== "workspace"
+        ? `Agent · ${ctx.workspaceName}`
+        : "Agent",
     shortLabel: "Agent",
     render: (ctx) => (
-      <AgentScreen isConnected={ctx.isConnected} onError={ctx.onError} />
+      <AgentScreen
+        isConnected={ctx.isConnected}
+        workspacePath={ctx.workspacePath}
+        workspaceName={ctx.workspaceName}
+        onError={ctx.onError}
+      />
     ),
   },
   {
@@ -57,10 +68,33 @@ const ALL_TABS: NavigationTabConfig[] = [
   },
   {
     id: "code",
-    label: "Code",
+    label: (ctx) =>
+      ctx.workspaceName && ctx.workspaceName !== "workspace"
+        ? `Code · ${ctx.workspaceName}`
+        : "Code",
     shortLabel: "Code",
     render: (ctx) => (
-      <HomeScreen isConnected={ctx.isConnected} onError={ctx.onError} />
+      <CodeScreen
+        key={ctx.workspacePath ?? "default"}
+        isConnected={ctx.isConnected}
+        workspacePath={ctx.workspacePath}
+        workspaceName={ctx.workspaceName}
+        onError={ctx.onError}
+      />
+    ),
+  },
+  {
+    id: "git",
+    label: "Git",
+    shortLabel: "Git",
+    render: (ctx) => (
+      <GitScreen
+        isConnected={ctx.isConnected}
+        onError={ctx.onError}
+        onOpenFile={(path) => {
+          ctx.onOpenInEditor(path);
+        }}
+      />
     ),
   },
   {
@@ -78,6 +112,9 @@ const ALL_TABS: NavigationTabConfig[] = [
         workspaceName={ctx.workspaceName}
         workspacePath={ctx.workspacePath}
         onError={ctx.onError}
+        onOpenInEditor={(path) => {
+          ctx.onOpenInEditor(path);
+        }}
       />
     ),
   },

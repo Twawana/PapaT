@@ -49,10 +49,55 @@ export interface AgentSessionSummary {
   messageCount: number;
 }
 
+export type ExecuteLanguage = "javascript" | "python" | "typescript" | "shell";
+
+export type ShellKind = "cmd" | "powershell";
+
+export interface FileSearchHit {
+  path: string;
+  name: string;
+}
+
+export interface GrepHit {
+  path: string;
+  line: number;
+  column: number;
+  text: string;
+}
+
+export interface GitFileStatus {
+  path: string;
+  index: string;
+  working: string;
+}
+
+export interface GitStatusResult {
+  branch: string;
+  isRepo: boolean;
+  clean: boolean;
+  files: GitFileStatus[];
+  ahead?: number;
+  behind?: number;
+}
+
+export interface DiagnosticItem {
+  file: string;
+  line: number;
+  column: number;
+  severity: "error" | "warning" | "info";
+  message: string;
+  source: string;
+}
+
+export interface PackageScript {
+  name: string;
+  command: string;
+}
+
 export type ClientMessage =
   | { type: "ping" }
-  | { type: "execute"; id: string; code: string; language: "javascript" }
-  | { type: "shell_run"; id: string; command: string }
+  | { type: "execute"; id: string; code: string; language: ExecuteLanguage }
+  | { type: "shell_run"; id: string; command: string; shell?: ShellKind }
   | { type: "shell_cancel"; id: string }
   | { type: "fs_list"; id: string; path: string }
   | { type: "fs_read"; id: string; path: string }
@@ -66,6 +111,20 @@ export type ClientMessage =
   | { type: "fs_delete"; id: string; path: string }
   | { type: "fs_mkdir"; id: string; path: string }
   | { type: "fs_move"; id: string; from: string; to: string }
+  | { type: "fs_search"; id: string; query: string; limit?: number }
+  | { type: "fs_grep"; id: string; query: string; limit?: number }
+  | { type: "git_status"; id: string }
+  | { type: "git_diff"; id: string; path?: string }
+  | { type: "git_add"; id: string; paths?: string[] }
+  | { type: "git_commit"; id: string; message: string }
+  | { type: "git_pull"; id: string }
+  | { type: "git_push"; id: string }
+  | { type: "git_checkout"; id: string; branch: string; create?: boolean }
+  | { type: "git_log"; id: string; limit?: number }
+  | { type: "git_stash"; id: string; message?: string }
+  | { type: "git_merge"; id: string; branch: string }
+  | { type: "diagnostics_run"; id: string }
+  | { type: "scripts_list"; id: string }
   | { type: "workspace_recent"; id: string }
   | { type: "workspace_get"; id: string }
   | { type: "browse_roots"; id: string }
@@ -104,6 +163,8 @@ export type ServerMessage =
         workspaceFolders?: string[];
         activeFile?: string | null;
       };
+      shellOptions?: ShellKind[];
+      defaultShell?: ShellKind;
     }
   | { type: "pong" }
   | {
@@ -112,7 +173,14 @@ export type ServerMessage =
       stream: "stdout" | "stderr";
       data: string;
     }
-  | { type: "done"; id: string; exitCode: number | null; signal: string | null; cwd?: string }
+  | {
+      type: "done";
+      id: string;
+      exitCode: number | null;
+      signal: string | null;
+      cwd?: string;
+      shell?: ShellKind;
+    }
   | { type: "error"; id?: string; message: string }
   | { type: "fs_list_result"; id: string; path: string; entries: FileEntry[] }
   | {
@@ -133,6 +201,15 @@ export type ServerMessage =
   | { type: "fs_delete_result"; id: string; path: string }
   | { type: "fs_mkdir_result"; id: string; path: string }
   | { type: "fs_move_result"; id: string; from: string; to: string }
+  | { type: "fs_search_result"; id: string; hits: FileSearchHit[] }
+  | { type: "fs_grep_result"; id: string; hits: GrepHit[] }
+  | { type: "git_status_result"; id: string; status: GitStatusResult }
+  | { type: "git_diff_result"; id: string; diff: string }
+  | { type: "git_add_result"; id: string; ok: true }
+  | { type: "git_commit_result"; id: string; output: string }
+  | { type: "git_action_result"; id: string; output: string }
+  | { type: "diagnostics_result"; id: string; items: DiagnosticItem[] }
+  | { type: "scripts_list_result"; id: string; scripts: PackageScript[] }
   | {
       type: "workspace_recent_result";
       id: string;
@@ -228,6 +305,8 @@ export type ServerMessage =
         workspaceFolders?: string[];
         activeFile?: string | null;
       };
+      shellOptions?: ShellKind[];
+      defaultShell?: ShellKind;
     }
   | { type: "auth_error"; message: string };
 

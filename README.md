@@ -163,6 +163,44 @@ The **Agent** tab sends messages to your PC host, which runs the **Cursor CLI** 
 
 Optional: set `CURSOR_API_KEY` instead of `agent login` for automation. To use OpenAI instead, set `PAPAT_LLM_PROVIDER=openai` and `OPENAI_API_KEY`.
 
+## Mobile IDE (Code tab)
+
+The **Code** tab is a mini-IDE on your phone:
+
+| Feature | Description |
+|---------|-------------|
+| **Syntax highlighting** | CodeMirror editor (JS, TS, Python, shell, JSON, Markdown, CSS, HTML) |
+| **File tabs** | Open multiple files; dirty indicator; swipe/close tabs |
+| **Quick Open** | Fuzzy file search across the workspace + recent files |
+| **Find in file** | Search within the active editor |
+| **Split tree + editor** | Collapsible workspace file tree beside the editor |
+| **Run** | Execute JS, TS, Python, or shell snippets on your PC |
+| **npm scripts** | One-tap run presets from `package.json` |
+| **Problems** | TypeScript + ESLint diagnostics from the host |
+| **Workspace search** | Ripgrep-powered text search (with fallback walk) |
+| **Git tab** | Status, stage, diff, commit |
+| **Markdown preview** | Toggle preview for `.md` files |
+| **Snippets** | Built-in snippets for common patterns |
+| **Offline saves** | Writes queue when disconnected; sync on reconnect |
+| **Haptics** | Success feedback when the agent finishes |
+
+Open files from **Files** or **Git** — they jump to the Code tab automatically.
+
+## Git & Search Protocol
+
+| Client message | Server response |
+|----------------|-----------------|
+| `fs_search` | `fs_search_result` with filename hits |
+| `fs_grep` | `fs_grep_result` with line matches |
+| `git_status` | `git_status_result` |
+| `git_diff` | `git_diff_result` |
+| `git_add` | `git_add_result` |
+| `git_commit` | `git_commit_result` |
+| `diagnostics_run` | `diagnostics_result` (tsc + eslint) |
+| `scripts_list` | `scripts_list_result` from `package.json` |
+
+Execute supports `javascript`, `typescript`, `python`, and `shell` via the `execute` message.
+
 ## File System Protocol (MVP 2)
 
 All paths are relative to `PAPAT_WORKSPACE`. The mobile app syncs on demand (list/read/write/delete over WebSocket).
@@ -180,9 +218,9 @@ All paths are relative to `PAPAT_WORKSPACE`. The mobile app syncs on demand (lis
 - [x] **MVP 1** — WebSocket connection, JS execution, terminal output
 - [x] **MVP 2** — File system (read/write/list/delete)
 - [x] **MVP 2b** — Open projects in Cursor/VS Code, browse PC folders, recent folders
-- [ ] **MVP 3** — Mobile code editor enhancements
+- [x] **MVP 3** — Mobile mini-IDE (editor, tabs, quick open, find, tree split)
 - [x] **MVP 4** — AI agent with tool calling
-- [ ] **MVP 5** — Python + multi-language
+- [x] **MVP 5** — Python + multi-language execute
 - [x] **MVP 6** — Auth & QR pairing
 - [x] **MVP 7** — VS Code extension (direct WebSocket bridge)
 

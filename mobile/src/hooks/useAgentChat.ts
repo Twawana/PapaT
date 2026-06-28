@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import * as Haptics from "expo-haptics";
 import { papatClient } from "../services/websocket";
 import {
   createSessionId,
@@ -269,6 +270,9 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
         case "agent_done":
           setIsRunning(false);
           assistantIdRef.current = null;
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
+            () => {}
+          );
           setMessages((prev) =>
             prev.map((item) =>
               item.kind === "assistant" ? { ...item, streaming: false } : item

@@ -2,9 +2,11 @@ import * as fs from "fs";
 import * as path from "path";
 import { WebSocket } from "ws";
 import { getWorkspaceRoot } from "./workspace-state";
+import { defaultShellKind, ShellKind } from "./shell-types";
 
 export interface ShellSession {
   cwd: string;
+  shell: ShellKind;
 }
 
 const sessions = new WeakMap<WebSocket, ShellSession>();
@@ -12,10 +14,16 @@ const sessions = new WeakMap<WebSocket, ShellSession>();
 export function getShellSession(ws: WebSocket): ShellSession {
   let session = sessions.get(ws);
   if (!session) {
-    session = { cwd: getWorkspaceRoot() };
+    session = { cwd: getWorkspaceRoot(), shell: defaultShellKind() };
     sessions.set(ws, session);
   }
   return session;
+}
+
+export function setShellSessionKind(ws: WebSocket, shell: ShellKind): ShellKind {
+  const session = getShellSession(ws);
+  session.shell = shell;
+  return session.shell;
 }
 
 export function clearShellSession(ws: WebSocket): void {

@@ -16,27 +16,18 @@ export interface ActiveExecution {
   kill: () => void;
 }
 
-/**
- * Executes JavaScript code on the host PC inside a temporary file.
- * Output is streamed in real time via callbacks.
- */
-export function executeJavaScript(
-  code: string,
+export type ExecuteLanguage = "javascript" | "python" | "typescript" | "shell";
+
+function spawnCodeExecution(
+  command: string,
+  args: string[],
   callbacks: ExecutionCallbacks
 ): ActiveExecution {
-  const tmpDir = path.join(os.tmpdir(), "pap-at-exec");
-  fs.mkdirSync(tmpDir, { recursive: true });
-
-  const filePath = path.join(tmpDir, `exec-${Date.now()}.js`);
-  fs.writeFileSync(filePath, code, "utf-8");
-
-  const child = spawn(process.execPath, [filePath], {
+  const child = spawn(command, args, {
     cwd: getWorkspaceRoot(),
-    env: {
-      ...process.env,
-      NODE_ENV: "development",
-    },
+    env: { ...process.env, NODE_ENV: "development" },
     stdio: ["ignore", "pipe", "pipe"],
+    shell: false,
     windowsHide: true,
   });
 
@@ -64,7 +55,6 @@ export function executeJavaScript(
 
   child.on("close", (exitCode, signal) => {
     clearTimeout(timeout);
-    fs.unlink(filePath, () => {});
     callbacks.onDone(exitCode, signal);
   });
 
@@ -77,6 +67,78 @@ export function executeJavaScript(
       }
     },
   };
+}
+
+/**
+ * Executes JavaScript code on the host PC inside a temporary file.
+ * Output is streamed in real time via callbacks.
+ */
+export function executeJavaScript(
+  code: string,
+  callbacks: ExecutionCallbacks
+): ActiveExecution {
+  const tmpDir = path.join(os.tmpdir(), "pap-at-exec");
+  fs.mkdirSync(tmpDir, { recursive: true });
+
+  const filePath = path.join(tmpDir, `exec-${Date.now()}.js`);
+  fs.writeFileSync(filePath, code, "utf-8");
+
+  return spawnCodeExecution(process.execPath, [filePath], {
+    ...callbacks,
+    onDone: (exitCode, signal) => {
+      fs.unlink(filePath, () => {});
+      callbacks.onDone(exitCode, signal);
+    },
+  });
+}
+
+export function executeCode(
+  code: string,
+  language: ExecuteLanguage,
+  callbacks: ExecutionCallbacks
+): ActiveExecution {
+  const tmpDir = path.join(os.tmpdir(), "pap-at-exec");
+  fs.mkdirSync(tmpDir, { recursive: true });
+  const stamp = Date.now();
+
+  if (language === "javascript") {
+    return executeJavaScript(code, callbacks);
+  }
+
+  if (language === "python") {
+    const filePath = path.join(tmpDir, `exec-${stamp}.py`);
+    fs.writeFileSync(filePath, code, "utf-8");
+    const py = process.platform === "win32" ? "python" : "python3";
+    return spawnCodeExecution(py, [filePath], {
+      ...callbacks,
+      onDone: (exitCode, signal) => {
+        fs.unlink(filePath, () => {});
+        callbacks.onDone(exitCode, signal);
+      },
+    });
+  }
+
+  if (language === "typescript") {
+    const filePath = path.join(tmpDir, `exec-${stamp}.ts`);
+    fs.writeFileSync(filePath, code, "utf-8");
+    return spawnCodeExecution("npx", ["tsx", filePath], {
+      ...callbacks,
+      onDone: (exitCode, signal) => {
+        fs.unlink(filePath, () => {});
+        callbacks.onDone(exitCode, signal);
+      },
+    });
+  }
+
+  if (language === "shell") {
+    if (process.platform === "win32") {
+      return spawnCodeExecution("cmd.exe", ["/c", code], callbacks);
+    }
+    return spawnCodeExecution("/bin/sh", ["-c", code], callbacks);
+  }
+
+  callbacks.onError(`Unsupported language: ${language}`);
+  return { kill: () => {} };
 }
 
 export interface JavaScriptResult {

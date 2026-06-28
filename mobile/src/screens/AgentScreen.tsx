@@ -13,9 +13,12 @@ import {
 import { CookingBanner } from "../components/CookingBanner";
 import { useAgentChat } from "../hooks/useAgentChat";
 import { AgentUiMessage } from "../types/protocol";
+import { dismissKeyboard, keyboardAvoidBehavior, keyboardPersistTaps } from "../utils/keyboard";
 
 interface Props {
   isConnected: boolean;
+  workspacePath: string | null;
+  workspaceName: string;
   onError: (message: string | null) => void;
 }
 
@@ -103,7 +106,12 @@ function visibleMessages(messages: AgentUiMessage[]): AgentUiMessage[] {
   });
 }
 
-export default function AgentScreen({ isConnected, onError }: Props) {
+export default function AgentScreen({
+  isConnected,
+  workspacePath,
+  workspaceName,
+  onError,
+}: Props) {
   const listRef = useRef<FlatList>(null);
   const chat = useAgentChat(isConnected, onError);
 
@@ -123,6 +131,7 @@ export default function AgentScreen({ isConnected, onError }: Props) {
   const handleSend = () => {
     onError(null);
     chat.sendMessage();
+    dismissKeyboard();
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
   };
 
@@ -130,25 +139,40 @@ export default function AgentScreen({ isConnected, onError }: Props) {
     chat.sessions.some((session) => session.sessionId === chat.activeSessionId) ||
     chat.messages.length > 0;
 
+  const hasWorkspace = !!workspacePath;
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={100}
+      behavior={keyboardAvoidBehavior()}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 88 : 0}
     >
       <View style={styles.toolbar}>
-        <Text style={styles.title}>AI Agent</Text>
+        <View style={styles.titleBlock}>
+          <Text style={styles.title}>AI Agent</Text>
+          {hasWorkspace ? (
+            <Text style={styles.workspaceHint} numberOfLines={1}>
+              Working in {workspaceName}
+            </Text>
+          ) : null}
+        </View>
         <View style={styles.toolbarActions}>
           <Pressable
             style={[styles.actionBtn, chat.isRunning && styles.btnDisabled]}
-            onPress={chat.newChat}
+            onPress={() => {
+            dismissKeyboard();
+            chat.newChat();
+          }}
             disabled={chat.isRunning}
           >
             <Text style={styles.actionBtnText}>New</Text>
           </Pressable>
           <Pressable
             style={[styles.clearBtn, (!isConnected || chat.isRunning) && styles.btnDisabled]}
-            onPress={chat.clearChat}
+            onPress={() => {
+            dismissKeyboard();
+            chat.clearChat();
+          }}
             disabled={!isConnected || chat.isRunning}
           >
             <Text style={styles.clearBtnText}>Clear</Text>
@@ -186,6 +210,10 @@ export default function AgentScreen({ isConnected, onError }: Props) {
 
       {!isConnected ? (
         <Text style={styles.hint}>Connect to your PC to use the agent.</Text>
+      ) : !hasWorkspace ? (
+        <Text style={styles.hint}>
+          Open a project folder first, then use Agent to work on that project.
+        </Text>
       ) : null}
 
       <CookingBanner visible={isConnected && chat.isRunning} subtitle={cookingSubtitle} />
@@ -197,7 +225,9 @@ export default function AgentScreen({ isConnected, onError }: Props) {
         style={styles.list}
         contentContainerStyle={styles.listContent}
         removeClippedSubviews={false}
-        keyboardShouldPersistTaps="handled"
+        keyboardShouldPersistTaps={keyboardPersistTaps}
+        keyboardDismissMode="on-drag"
+        onScrollBeginDrag={dismissKeyboard}
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
         ListEmptyComponent={
           chat.isRunning ? null : (
@@ -219,7 +249,7 @@ export default function AgentScreen({ isConnected, onError }: Props) {
           placeholder="Ask the agent..."
           placeholderTextColor="#484f58"
           multiline
-          editable={isConnected && !chat.isRunning}
+          editable={isConnected && !chat.isRunning && hasWorkspace}
           contextMenuHidden={false}
           selectionColor="#58a6ff"
           selectTextOnFocus={false}
@@ -232,10 +262,10 @@ export default function AgentScreen({ isConnected, onError }: Props) {
           <Pressable
             style={[
               styles.sendBtn,
-              (!isConnected || !chat.input.trim()) && styles.btnDisabled,
+              (!isConnected || !chat.input.trim() || !hasWorkspace) && styles.btnDisabled,
             ]}
             onPress={handleSend}
-            disabled={!isConnected || !chat.input.trim()}
+            disabled={!isConnected || !chat.input.trim() || !hasWorkspace}
           >
             <Text style={styles.sendBtnText}>Send</Text>
           </Pressable>
@@ -263,6 +293,15 @@ const styles = StyleSheet.create({
     color: "#c9d1d9",
     fontWeight: "600",
     fontSize: 14,
+  },
+  titleBlock: {
+    flex: 1,
+    marginRight: 8,
+  },
+  workspaceHint: {
+    color: "#58a6ff",
+    fontSize: 12,
+    marginTop: 2,
   },
   actionBtn: {
     paddingHorizontal: 10,

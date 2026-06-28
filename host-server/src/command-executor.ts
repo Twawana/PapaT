@@ -1,5 +1,10 @@
 import { spawn } from "child_process";
-import * as os from "os";
+import {
+  defaultShellKind,
+  resolveShellSpawn,
+  shellLabel,
+  ShellKind,
+} from "./shell-types";
 import { config } from "./config";
 import { getWorkspaceRoot } from "./workspace-state";
 import type { ActiveExecution } from "./executor";
@@ -27,7 +32,8 @@ const BLOCKED_PATTERNS = [
 
 export function runShellCommand(
   command: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  shell: ShellKind = defaultShellKind()
 ): Promise<CommandResult> {
   const trimmed = command.trim();
   if (!trimmed) {
@@ -41,12 +47,10 @@ export function runShellCommand(
   }
 
   const cwd = getWorkspaceRoot();
-  const shell = process.platform === "win32" ? "cmd.exe" : "/bin/sh";
-  const shellArgs =
-    process.platform === "win32" ? ["/c", trimmed] : ["-c", trimmed];
+  const { executable, args } = resolveShellSpawn(shell, trimmed);
 
   return new Promise((resolve, reject) => {
-    const child = spawn(shell, shellArgs, {
+    const child = spawn(executable, args, {
       cwd,
       env: process.env,
       windowsHide: true,
@@ -108,13 +112,14 @@ export function runShellCommand(
 }
 
 export function getDefaultShellHint(): string {
-  return process.platform === "win32" ? "cmd.exe" : os.userInfo().shell || "sh";
+  return shellLabel("cmd");
 }
 
 export function runShellCommandStreaming(
   command: string,
   cwd: string,
-  callbacks: ShellExecutionCallbacks
+  callbacks: ShellExecutionCallbacks,
+  shell: ShellKind = defaultShellKind()
 ): ActiveExecution {
   const trimmed = command.trim();
   if (!trimmed) {
@@ -129,11 +134,9 @@ export function runShellCommandStreaming(
     }
   }
 
-  const shell = process.platform === "win32" ? "cmd.exe" : "/bin/sh";
-  const shellArgs =
-    process.platform === "win32" ? ["/c", trimmed] : ["-c", trimmed];
+  const { executable, args } = resolveShellSpawn(shell, trimmed);
 
-  const child = spawn(shell, shellArgs, {
+  const child = spawn(executable, args, {
     cwd,
     env: process.env,
     windowsHide: true,

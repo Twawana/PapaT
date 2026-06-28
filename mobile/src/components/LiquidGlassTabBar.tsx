@@ -31,6 +31,7 @@ const TAB_ICONS: Record<
   terminal: { active: "terminal", inactive: "terminal-outline" },
   code: { active: "code-slash", inactive: "code-slash-outline" },
   files: { active: "documents", inactive: "documents-outline" },
+  git: { active: "git-branch", inactive: "git-branch-outline" },
 };
 
 interface Props {

@@ -1,4 +1,4 @@
-import { ClientMessage, EditorId, ServerMessage } from "../types/protocol";
+import { ClientMessage, EditorId, ExecuteLanguage, ServerMessage, ShellKind } from "../types/protocol";
 import { errorMessage } from "../utils/errors";
 
 type MessageHandler = (message: ServerMessage) => void;
@@ -183,12 +183,12 @@ export class PapaTClient {
     this.send({ type: "ping" });
   }
 
-  execute(id: string, code: string): void {
-    this.send({ type: "execute", id, code, language: "javascript" });
+  execute(id: string, code: string, language: ExecuteLanguage = "javascript"): void {
+    this.send({ type: "execute", id, code, language });
   }
 
-  shellRun(id: string, command: string): void {
-    this.send({ type: "shell_run", id, command });
+  shellRun(id: string, command: string, shell?: ShellKind): void {
+    this.send({ type: "shell_run", id, command, shell });
   }
 
   shellCancel(id: string): void {
@@ -329,6 +329,95 @@ export class PapaTClient {
     return this.request(id, { type: "vscode_open_file", id, path }, [
       "vscode_open_file_result",
     ]);
+  }
+
+  searchFiles(
+    query: string,
+    limit = 50
+  ): Promise<Extract<ServerMessage, { type: "fs_search_result" }>> {
+    const id = createRequestId("fs-search");
+    return this.request(id, { type: "fs_search", id, query, limit }, [
+      "fs_search_result",
+    ]);
+  }
+
+  grepWorkspace(
+    query: string,
+    limit = 80
+  ): Promise<Extract<ServerMessage, { type: "fs_grep_result" }>> {
+    const id = createRequestId("fs-grep");
+    return this.request(id, { type: "fs_grep", id, query, limit }, [
+      "fs_grep_result",
+    ]);
+  }
+
+  gitStatus(): Promise<Extract<ServerMessage, { type: "git_status_result" }>> {
+    const id = createRequestId("git-status");
+    return this.request(id, { type: "git_status", id }, ["git_status_result"]);
+  }
+
+  gitDiff(path?: string): Promise<Extract<ServerMessage, { type: "git_diff_result" }>> {
+    const id = createRequestId("git-diff");
+    return this.request(id, { type: "git_diff", id, path }, ["git_diff_result"]);
+  }
+
+  gitAdd(paths?: string[]): Promise<Extract<ServerMessage, { type: "git_add_result" }>> {
+    const id = createRequestId("git-add");
+    return this.request(id, { type: "git_add", id, paths }, ["git_add_result"]);
+  }
+
+  gitCommit(message: string): Promise<Extract<ServerMessage, { type: "git_commit_result" }>> {
+    const id = createRequestId("git-commit");
+    return this.request(id, { type: "git_commit", id, message }, [
+      "git_commit_result",
+    ]);
+  }
+
+  gitPull(): Promise<Extract<ServerMessage, { type: "git_action_result" }>> {
+    const id = createRequestId("git-pull");
+    return this.request(id, { type: "git_pull", id }, ["git_action_result"], 120_000);
+  }
+
+  gitPush(): Promise<Extract<ServerMessage, { type: "git_action_result" }>> {
+    const id = createRequestId("git-push");
+    return this.request(id, { type: "git_push", id }, ["git_action_result"], 120_000);
+  }
+
+  gitCheckout(
+    branch: string,
+    create = false
+  ): Promise<Extract<ServerMessage, { type: "git_action_result" }>> {
+    const id = createRequestId("git-checkout");
+    return this.request(
+      id,
+      { type: "git_checkout", id, branch, create },
+      ["git_action_result"]
+    );
+  }
+
+  gitLog(limit = 10): Promise<Extract<ServerMessage, { type: "git_action_result" }>> {
+    const id = createRequestId("git-log");
+    return this.request(id, { type: "git_log", id, limit }, ["git_action_result"]);
+  }
+
+  gitStash(message?: string): Promise<Extract<ServerMessage, { type: "git_action_result" }>> {
+    const id = createRequestId("git-stash");
+    return this.request(id, { type: "git_stash", id, message }, ["git_action_result"]);
+  }
+
+  gitMerge(branch: string): Promise<Extract<ServerMessage, { type: "git_action_result" }>> {
+    const id = createRequestId("git-merge");
+    return this.request(id, { type: "git_merge", id, branch }, ["git_action_result"], 120_000);
+  }
+
+  runDiagnostics(): Promise<Extract<ServerMessage, { type: "diagnostics_result" }>> {
+    const id = createRequestId("diagnostics");
+    return this.request(id, { type: "diagnostics_run", id }, ["diagnostics_result"], 120_000);
+  }
+
+  listScripts(): Promise<Extract<ServerMessage, { type: "scripts_list_result" }>> {
+    const id = createRequestId("scripts-list");
+    return this.request(id, { type: "scripts_list", id }, ["scripts_list_result"]);
   }
 
   private emitStatus(status: "open" | "close" | "error", detail?: string): void {

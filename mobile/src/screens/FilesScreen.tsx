@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { papatClient } from "../services/websocket";
+import { dismissKeyboard, keyboardPersistTaps } from "../utils/keyboard";
 import { BrowseEntry, BrowseRoot, FileEntry } from "../types/protocol";
 import {
   dirname,
@@ -21,6 +22,7 @@ import {
   parentPath,
   pathLabel,
 } from "../utils/paths";
+import { copyPathToClipboard } from "../utils/clipboard";
 
 interface Props {
   isConnected: boolean;
@@ -28,6 +30,7 @@ interface Props {
   workspaceName?: string;
   workspacePath?: string | null;
   onError: (message: string | null) => void;
+  onOpenInEditor?: (path: string) => void;
 }
 
 function formatSize(bytes?: number): string {
@@ -77,6 +80,7 @@ export default function FilesScreen({
   workspaceName,
   workspacePath,
   onError,
+  onOpenInEditor,
 }: Props) {
   const [currentPath, setCurrentPath] = useState(".");
   const [entries, setEntries] = useState<FileEntry[]>([]);
@@ -146,8 +150,14 @@ export default function FilesScreen({
   }, [isConnected, currentPath, loadDirectory]);
 
   const openFile = async (entry: FileEntry) => {
+    dismissKeyboard();
     if (entry.entryType === "directory") {
       setCurrentPath(entry.path);
+      return;
+    }
+
+    if (onOpenInEditor) {
+      onOpenInEditor(entry.path);
       return;
     }
 
@@ -220,7 +230,25 @@ export default function FilesScreen({
   };
 
   const showEntryActions = (entry: FileEntry) => {
-    Alert.alert(entry.name, undefined, [
+    const actions: Array<{
+      text: string;
+      onPress?: () => void;
+      style?: "cancel" | "destructive" | "default";
+    }> = [];
+
+    if (entry.entryType === "file" && onOpenInEditor) {
+      actions.push({
+        text: "Open in Code",
+        onPress: () => onOpenInEditor(entry.path),
+      });
+    }
+
+    actions.push({
+      text: "Copy Path",
+      onPress: () => void copyPathToClipboard(entry.path),
+    });
+
+    actions.push(
       {
         text: "Rename",
         onPress: () => {
@@ -239,8 +267,10 @@ export default function FilesScreen({
         style: "destructive",
         onPress: () => confirmDelete(entry),
       },
-      { text: "Cancel", style: "cancel" },
-    ]);
+      { text: "Cancel", style: "cancel" }
+    );
+
+    Alert.alert(entry.name, undefined, actions);
   };
 
   const promptNewItem = (kind: "file" | "folder") => {
@@ -533,6 +563,9 @@ export default function FilesScreen({
         <FlatList
           data={entries}
           keyExtractor={(item) => item.path}
+          keyboardShouldPersistTaps={keyboardPersistTaps}
+          keyboardDismissMode="on-drag"
+          onScrollBeginDrag={dismissKeyboard}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

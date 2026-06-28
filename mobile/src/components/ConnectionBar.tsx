@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Keyboard,
   Pressable,
   StyleSheet,
   Text,
@@ -107,6 +108,8 @@ export function ConnectionBar({
               placeholderTextColor="#484f58"
               autoCapitalize="none"
               autoCorrect={false}
+              returnKeyType="done"
+              onSubmitEditing={Keyboard.dismiss}
             />
             <TextInput
               style={[styles.input, styles.portInput]}
@@ -115,6 +118,8 @@ export function ConnectionBar({
               placeholder="Port"
               placeholderTextColor="#484f58"
               keyboardType="number-pad"
+              returnKeyType="done"
+              onSubmitEditing={Keyboard.dismiss}
             />
             {isConnected ? (
               <Pressable style={styles.disconnectBtn} onPress={onDisconnect}>

@@ -9,7 +9,8 @@ import {
   View,
 } from "react-native";
 import { papatClient } from "../services/websocket";
-import { ServerMessage } from "../types/protocol";
+import { ServerMessage, ShellKind } from "../types/protocol";
+import { dismissKeyboard, keyboardPersistTaps } from "../utils/keyboard";
 
 interface Props {
   isConnected: boolean;
@@ -26,20 +27,26 @@ function createShellId(): string {
   return `shell-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function getPromptPrefix(cwd: string): string {
+function getPromptPrefix(cwd: string, shell: ShellKind): string {
   const parts = cwd.replace(/\\/g, "/").split("/").filter(Boolean);
   const tail = parts.slice(-2).join("/") || cwd;
-  return `${tail} $ `;
+  return shell === "powershell" ? `PS ${tail}> ` : `${tail}> `;
+}
+
+function shellHint(shell: ShellKind): string {
+  return shell === "powershell" ? "PowerShell" : "CMD";
 }
 
 export default function TerminalScreen({ isConnected, onError }: Props) {
   const [command, setCommand] = useState("");
   const [cwd, setCwd] = useState("");
+  const [shell, setShell] = useState<ShellKind>("cmd");
+  const [shellOptions, setShellOptions] = useState<ShellKind[]>(["cmd", "powershell"]);
   const [lines, setLines] = useState<TerminalLine[]>([
     {
       id: "welcome",
       kind: "system",
-      text: "Remote shell on your PC. Type a command and press Run.\n",
+      text: "Remote shell on your PC. Use CMD or PowerShell — pick below.\n",
     },
   ]);
   const [isRunning, setIsRunning] = useState(false);
@@ -66,6 +73,12 @@ export default function TerminalScreen({ isConnected, onError }: Props) {
             setCwd(message.workspace);
             promptCwd.current = message.workspace;
           }
+          if (message.shellOptions?.length) {
+            setShellOptions(message.shellOptions);
+          }
+          if (message.defaultShell) {
+            setShell(message.defaultShell);
+          }
           break;
 
         case "output":
@@ -79,6 +92,9 @@ export default function TerminalScreen({ isConnected, onError }: Props) {
             if (message.cwd) {
               setCwd(message.cwd);
               promptCwd.current = message.cwd;
+            }
+            if (message.shell) {
+              setShell(message.shell);
             }
             if (message.signal) {
               appendLine("system", "\n[Command cancelled]\n");
@@ -127,7 +143,7 @@ export default function TerminalScreen({ isConnected, onError }: Props) {
     setIsRunning(true);
     onError(null);
 
-    const prefix = getPromptPrefix(promptCwd.current || cwd || "~");
+    const prefix = getPromptPrefix(promptCwd.current || cwd || "~", shell);
     appendLine("prompt", `${prefix}${trimmed}\n`);
 
     setHistory((prev) => {
@@ -138,7 +154,8 @@ export default function TerminalScreen({ isConnected, onError }: Props) {
     setCommand("");
 
     try {
-      papatClient.shellRun(id, trimmed);
+      papatClient.shellRun(id, trimmed, shell);
+      dismissKeyboard();
     } catch (err) {
       setIsRunning(false);
       activeShellId.current = null;
@@ -199,6 +216,35 @@ export default function TerminalScreen({ isConnected, onError }: Props) {
     <View style={styles.flex}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Shell</Text>
+        {shellOptions.length > 1 ? (
+          <View style={styles.shellToggle}>
+            {shellOptions.map((option) => (
+              <Pressable
+                key={option}
+                style={[styles.shellChip, shell === option && styles.shellChipActive]}
+                onPress={() => {
+                  setShell(option);
+                  appendLine(
+                    "system",
+                    `Switched to ${shellHint(option)}.\n`
+                  );
+                }}
+                disabled={isRunning}
+              >
+                <Text
+                  style={[
+                    styles.shellChipText,
+                    shell === option && styles.shellChipTextActive,
+                  ]}
+                >
+                  {shellHint(option)}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : (
+          <Text style={styles.shellBadge}>{shellHint(shell)}</Text>
+        )}
         <Text style={styles.cwd} numberOfLines={1}>
           {cwd || "Not connected"}
         </Text>
@@ -207,10 +253,13 @@ export default function TerminalScreen({ isConnected, onError }: Props) {
         </Text>
       </View>
 
+      <Pressable style={styles.output} onPress={dismissKeyboard}>
       <ScrollView
         ref={scrollRef}
-        style={styles.output}
+        style={styles.outputScroll}
         contentContainerStyle={styles.outputContent}
+        keyboardShouldPersistTaps={keyboardPersistTaps}
+        keyboardDismissMode="on-drag"
       >
         {lines.map((line) => (
           <Text
@@ -222,14 +271,19 @@ export default function TerminalScreen({ isConnected, onError }: Props) {
           </Text>
         ))}
       </ScrollView>
+      </Pressable>
 
       <View style={styles.inputRow}>
-        <Text style={styles.prompt}>{">"}</Text>
+        <Text style={styles.prompt}>{shell === "powershell" ? "PS>" : ">"}</Text>
         <TextInput
           style={styles.input}
           value={command}
           onChangeText={setCommand}
-          placeholder="Enter command..."
+          placeholder={
+            shell === "powershell"
+              ? "Enter PowerShell command..."
+              : "Enter CMD command (dir, cd, npm)..."
+          }
           placeholderTextColor="#484f58"
           autoCapitalize="none"
           autoCorrect={false}
@@ -281,9 +335,43 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
+    flexWrap: "wrap",
     gap: 8,
     marginBottom: 8,
     paddingHorizontal: 4,
+  },
+  shellToggle: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  shellChip: {
+    backgroundColor: "#21262d",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: "#30363d",
+  },
+  shellChipActive: {
+    borderColor: "#1f6feb",
+    backgroundColor: "#0d1117",
+  },
+  shellChipText: {
+    color: "#8b949e",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  shellChipTextActive: {
+    color: "#58a6ff",
+  },
+  shellBadge: {
+    color: "#8b949e",
+    fontSize: 11,
+    fontWeight: "600",
+    backgroundColor: "#21262d",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
   headerTitle: {
     color: "#c9d1d9",
@@ -307,6 +395,9 @@ const styles = StyleSheet.create({
     borderColor: "#30363d",
     borderRadius: 8,
     marginBottom: 10,
+  },
+  outputScroll: {
+    flex: 1,
   },
   outputContent: {
     padding: 12,

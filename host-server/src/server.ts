@@ -15,13 +15,15 @@ import {
   isLocalConnection,
   markClientAuthenticated,
 } from "./client-auth";
-import { executeJavaScript, type ActiveExecution } from "./executor";
+import { executeCode, type ActiveExecution, type ExecuteLanguage } from "./executor";
 import { runShellCommandStreaming } from "./command-executor";
 import {
   clearShellSession,
   getShellSession,
+  setShellSessionKind,
   tryHandleCd,
 } from "./shell-session";
+import { availableShells, defaultShellKind, isShellKind } from "./shell-types";
 import {
   deletePath,
   listDirectory,
@@ -43,6 +45,21 @@ import {
   serializeServerMessage,
   ServerMessage,
 } from "./protocol";
+import { runDiagnostics } from "./diagnostics";
+import {
+  gitAdd,
+  gitCheckout,
+  gitCommit,
+  gitDiff,
+  gitLog,
+  gitMerge,
+  gitPull,
+  gitPush,
+  gitStash,
+  gitStatus,
+} from "./git";
+import { listPackageScripts } from "./scripts";
+import { grepWorkspace, searchFiles } from "./search";
 import { initWorkspace, getWorkspaceRoot } from "./workspace-state";
 import { resolveFsPath, toClientPath } from "./path-utils";
 import {
@@ -82,6 +99,8 @@ function buildConnectedMessage(deviceName?: string): Extract<
     authenticated: true,
     deviceName,
     vscode: getVscodeStatus(),
+    shellOptions: availableShells(),
+    defaultShell: defaultShellKind(),
   };
 }
 
@@ -100,6 +119,8 @@ function buildAuthOkMessage(
     deviceName,
     token,
     vscode: getVscodeStatus(),
+    shellOptions: availableShells(),
+    defaultShell: defaultShellKind(),
   };
 }
 
@@ -220,7 +241,7 @@ function handleMessage(
       break;
 
     case "shell_run":
-      handleShellRun(ws, message.id, message.command);
+      handleShellRun(ws, message.id, message.command, message.shell);
       break;
 
     case "shell_cancel":
@@ -249,6 +270,62 @@ function handleMessage(
 
     case "fs_move":
       handleFsMove(ws, message.id, message.from, message.to);
+      break;
+
+    case "fs_search":
+      handleFsSearch(ws, message.id, message.query, message.limit);
+      break;
+
+    case "fs_grep":
+      handleFsGrep(ws, message.id, message.query, message.limit);
+      break;
+
+    case "git_status":
+      handleGitStatus(ws, message.id);
+      break;
+
+    case "git_diff":
+      handleGitDiff(ws, message.id, message.path);
+      break;
+
+    case "git_add":
+      handleGitAdd(ws, message.id, message.paths);
+      break;
+
+    case "git_commit":
+      handleGitCommit(ws, message.id, message.message);
+      break;
+
+    case "git_pull":
+      handleGitPull(ws, message.id);
+      break;
+
+    case "git_push":
+      handleGitPush(ws, message.id);
+      break;
+
+    case "git_checkout":
+      handleGitCheckout(ws, message.id, message.branch, message.create);
+      break;
+
+    case "git_log":
+      handleGitLog(ws, message.id, message.limit);
+      break;
+
+    case "git_stash":
+      handleGitStash(ws, message.id, message.message);
+      break;
+
+    case "git_merge":
+      handleGitMerge(ws, message.id, message.branch);
+      break;
+
+    case "diagnostics_run":
+      handleDiagnosticsRun(ws, message.id);
+      break;
+
+    case "scripts_list":
+      handleScriptsList(ws, message.id);
       break;
 
     case "workspace_recent":
@@ -333,18 +410,19 @@ function handleExecute(
     return;
   }
 
-  if (language !== "javascript") {
+  const allowed: ExecuteLanguage[] = ["javascript", "python", "typescript", "shell"];
+  if (!allowed.includes(language as ExecuteLanguage)) {
     send(ws, {
       type: "error",
       id,
-      message: `Unsupported language: ${language}. MVP 1 supports javascript only.`,
+      message: `Unsupported language: ${language}. Supported: ${allowed.join(", ")}`,
     });
     return;
   }
 
-  console.log(`[PapaT Host] Executing ${id} (${code.length} chars)`);
+  console.log(`[PapaT Host] Executing ${id} (${language}, ${code.length} chars)`);
 
-  executeJavaScript(code, {
+  executeCode(code, language as ExecuteLanguage, {
     onStdout: (data) => send(ws, { type: "output", id, stream: "stdout", data }),
     onStderr: (data) => send(ws, { type: "output", id, stream: "stderr", data }),
     onError: (message) => send(ws, { type: "error", id, message }),
@@ -371,7 +449,12 @@ function cancelAllShellRuns(ws: WebSocket): void {
   map.clear();
 }
 
-function handleShellRun(ws: WebSocket, id: string, command: string): void {
+function handleShellRun(
+  ws: WebSocket,
+  id: string,
+  command: string,
+  shellArg?: string
+): void {
   if (!id || typeof id !== "string") {
     send(ws, { type: "error", message: "Missing shell run id" });
     return;
@@ -388,6 +471,10 @@ function handleShellRun(ws: WebSocket, id: string, command: string): void {
   }
 
   const session = getShellSession(ws);
+  if (shellArg && isShellKind(shellArg)) {
+    setShellSessionKind(ws, shellArg);
+  }
+
   const cdResult = tryHandleCd(command, session);
 
   if (cdResult.handled) {
@@ -405,11 +492,12 @@ function handleShellRun(ws: WebSocket, id: string, command: string): void {
       exitCode: cdResult.exitCode ?? 0,
       signal: null,
       cwd: session.cwd,
+      shell: session.shell,
     });
     return;
   }
 
-  console.log(`[PapaT Host] Shell ${id}: ${command.trim().slice(0, 80)}`);
+  console.log(`[PapaT Host] Shell ${id} (${session.shell}): ${command.trim().slice(0, 80)}`);
 
   const active = runShellCommandStreaming(command, session.cwd, {
     onStdout: (data) => send(ws, { type: "output", id, stream: "stdout", data }),
@@ -417,9 +505,9 @@ function handleShellRun(ws: WebSocket, id: string, command: string): void {
     onError: (message) => send(ws, { type: "error", id, message }),
     onDone: (exitCode, signal) => {
       getShellRunMap(ws).delete(id);
-      send(ws, { type: "done", id, exitCode, signal, cwd: session.cwd });
+      send(ws, { type: "done", id, exitCode, signal, cwd: session.cwd, shell: session.shell });
     },
-  });
+  }, session.shell);
 
   getShellRunMap(ws).set(id, active);
 }
@@ -567,6 +655,247 @@ async function handleFsMove(
       type: "error",
       id,
       message: err instanceof Error ? err.message : "Failed to move path",
+    });
+  }
+}
+
+function handleFsSearch(
+  ws: WebSocket,
+  id: string,
+  query: unknown,
+  limit?: number
+): void {
+  if (!requireRequestId(ws, id)) return;
+  if (typeof query !== "string") {
+    send(ws, { type: "error", id, message: "Query must be a string" });
+    return;
+  }
+
+  try {
+    const hits = searchFiles(query, typeof limit === "number" ? limit : 50);
+    send(ws, { type: "fs_search_result", id, hits });
+  } catch (err) {
+    send(ws, {
+      type: "error",
+      id,
+      message: err instanceof Error ? err.message : "Search failed",
+    });
+  }
+}
+
+function handleFsGrep(
+  ws: WebSocket,
+  id: string,
+  query: unknown,
+  limit?: number
+): void {
+  if (!requireRequestId(ws, id)) return;
+  if (typeof query !== "string") {
+    send(ws, { type: "error", id, message: "Query must be a string" });
+    return;
+  }
+
+  try {
+    const hits = grepWorkspace(query, typeof limit === "number" ? limit : 80);
+    send(ws, { type: "fs_grep_result", id, hits });
+  } catch (err) {
+    send(ws, {
+      type: "error",
+      id,
+      message: err instanceof Error ? err.message : "Grep failed",
+    });
+  }
+}
+
+function handleGitStatus(ws: WebSocket, id: string): void {
+  if (!requireRequestId(ws, id)) return;
+
+  try {
+    const status = gitStatus();
+    send(ws, { type: "git_status_result", id, status });
+  } catch (err) {
+    send(ws, {
+      type: "error",
+      id,
+      message: err instanceof Error ? err.message : "Git status failed",
+    });
+  }
+}
+
+function handleGitDiff(ws: WebSocket, id: string, pathArg?: string): void {
+  if (!requireRequestId(ws, id)) return;
+
+  try {
+    const diff = gitDiff(pathArg);
+    send(ws, { type: "git_diff_result", id, diff });
+  } catch (err) {
+    send(ws, {
+      type: "error",
+      id,
+      message: err instanceof Error ? err.message : "Git diff failed",
+    });
+  }
+}
+
+function handleGitAdd(ws: WebSocket, id: string, paths?: string[]): void {
+  if (!requireRequestId(ws, id)) return;
+
+  try {
+    gitAdd(paths ?? []);
+    send(ws, { type: "git_add_result", id, ok: true });
+  } catch (err) {
+    send(ws, {
+      type: "error",
+      id,
+      message: err instanceof Error ? err.message : "Git add failed",
+    });
+  }
+}
+
+function handleGitCommit(ws: WebSocket, id: string, message: unknown): void {
+  if (!requireRequestId(ws, id)) return;
+  if (typeof message !== "string") {
+    send(ws, { type: "error", id, message: "Commit message must be a string" });
+    return;
+  }
+
+  try {
+    const output = gitCommit(message);
+    send(ws, { type: "git_commit_result", id, output });
+  } catch (err) {
+    send(ws, {
+      type: "error",
+      id,
+      message: err instanceof Error ? err.message : "Git commit failed",
+    });
+  }
+}
+
+function handleGitPull(ws: WebSocket, id: string): void {
+  if (!requireRequestId(ws, id)) return;
+  try {
+    send(ws, { type: "git_action_result", id, output: gitPull() });
+  } catch (err) {
+    send(ws, {
+      type: "error",
+      id,
+      message: err instanceof Error ? err.message : "Git pull failed",
+    });
+  }
+}
+
+function handleGitPush(ws: WebSocket, id: string): void {
+  if (!requireRequestId(ws, id)) return;
+  try {
+    send(ws, { type: "git_action_result", id, output: gitPush() });
+  } catch (err) {
+    send(ws, {
+      type: "error",
+      id,
+      message: err instanceof Error ? err.message : "Git push failed",
+    });
+  }
+}
+
+function handleGitCheckout(
+  ws: WebSocket,
+  id: string,
+  branch: unknown,
+  create?: boolean
+): void {
+  if (!requireRequestId(ws, id)) return;
+  if (typeof branch !== "string") {
+    send(ws, { type: "error", id, message: "Branch name must be a string" });
+    return;
+  }
+
+  try {
+    send(ws, { type: "git_action_result", id, output: gitCheckout(branch, create === true) });
+  } catch (err) {
+    send(ws, {
+      type: "error",
+      id,
+      message: err instanceof Error ? err.message : "Git checkout failed",
+    });
+  }
+}
+
+function handleGitLog(ws: WebSocket, id: string, limit?: number): void {
+  if (!requireRequestId(ws, id)) return;
+
+  try {
+    send(ws, {
+      type: "git_action_result",
+      id,
+      output: gitLog(typeof limit === "number" ? limit : 10),
+    });
+  } catch (err) {
+    send(ws, {
+      type: "error",
+      id,
+      message: err instanceof Error ? err.message : "Git log failed",
+    });
+  }
+}
+
+function handleGitStash(ws: WebSocket, id: string, message?: string): void {
+  if (!requireRequestId(ws, id)) return;
+
+  try {
+    send(ws, { type: "git_action_result", id, output: gitStash(message) });
+  } catch (err) {
+    send(ws, {
+      type: "error",
+      id,
+      message: err instanceof Error ? err.message : "Git stash failed",
+    });
+  }
+}
+
+function handleGitMerge(ws: WebSocket, id: string, branch: unknown): void {
+  if (!requireRequestId(ws, id)) return;
+  if (typeof branch !== "string") {
+    send(ws, { type: "error", id, message: "Branch name must be a string" });
+    return;
+  }
+
+  try {
+    send(ws, { type: "git_action_result", id, output: gitMerge(branch) });
+  } catch (err) {
+    send(ws, {
+      type: "error",
+      id,
+      message: err instanceof Error ? err.message : "Git merge failed",
+    });
+  }
+}
+
+function handleDiagnosticsRun(ws: WebSocket, id: string): void {
+  if (!requireRequestId(ws, id)) return;
+
+  try {
+    const items = runDiagnostics();
+    send(ws, { type: "diagnostics_result", id, items });
+  } catch (err) {
+    send(ws, {
+      type: "error",
+      id,
+      message: err instanceof Error ? err.message : "Diagnostics failed",
+    });
+  }
+}
+
+function handleScriptsList(ws: WebSocket, id: string): void {
+  if (!requireRequestId(ws, id)) return;
+
+  try {
+    const scripts = listPackageScripts();
+    send(ws, { type: "scripts_list_result", id, scripts });
+  } catch (err) {
+    send(ws, {
+      type: "error",
+      id,
+      message: err instanceof Error ? err.message : "Failed to list scripts",
     });
   }
 }

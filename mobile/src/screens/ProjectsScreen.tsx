@@ -55,7 +55,11 @@ export default function ProjectsScreen({
       const result = await papatClient.getWorkspaceRecent();
       setRecent(result.recent);
       setSelectedPath((prev) => prev ?? result.current);
-      onWorkspaceChange(result.current, result.recent[0]?.name ?? "workspace");
+      const currentName =
+        result.recent.find((item) => item.path === result.current)?.name ||
+        result.current.split(/[/\\]/).pop() ||
+        "workspace";
+      onWorkspaceChange(result.current, currentName);
     } catch (err) {
       onError(err instanceof Error ? err.message : "Failed to load recent folders");
     } finally {
@@ -149,7 +153,7 @@ export default function ProjectsScreen({
   const selectBrowsedFolder = () => {
     if (!browsePath) return;
     setBrowseVisible(false);
-    void openProject(browsePath, vscodeConnected ? "vscode" : undefined);
+    void openProject(browsePath);
   };
 
   const selectedName =
@@ -244,8 +248,8 @@ export default function ProjectsScreen({
             return (
               <Pressable
                 style={[styles.recentRow, active && styles.recentRowActive]}
-                onPress={() => setSelectedPath(item.path)}
-                onLongPress={() => openProject(item.path, "vscode")}
+                onPress={() => openProject(item.path)}
+                onLongPress={() => openProject(item.path, "cursor")}
               >
                 <Text style={styles.recentIcon}>📁</Text>
                 <View style={styles.recentBody}>

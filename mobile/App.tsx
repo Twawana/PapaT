@@ -6,6 +6,7 @@ import {
   installGlobalErrorHandlers,
   registerGlobalErrorListener,
 } from "./src/services/globalErrors";
+import { EditorProvider } from "./src/context/EditorContext";
 import MainScreen from "./src/screens/MainScreen";
 
 export default function App() {
@@ -25,7 +26,9 @@ export default function App() {
             onDismiss={() => setGlobalError(null)}
           />
         ) : null}
-        <MainScreen />
+        <EditorProvider>
+          <MainScreen />
+        </EditorProvider>
       </ErrorBoundary>
     </SafeAreaProvider>
   );

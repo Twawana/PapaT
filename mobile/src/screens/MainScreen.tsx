@@ -1,7 +1,8 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -14,22 +15,84 @@ import {
   LiquidGlassTabBar,
   tabBarInset,
 } from "../components/LiquidGlassTabBar";
-import { resolveTabLabel } from "../config/navigationTabs";
+import { resolveTabLabel, TabId } from "../config/navigationTabs";
+import { KeyboardDismissView } from "../components/KeyboardDismissView";
+import { useEditor } from "../context/EditorContext";
+import {
+  dismissKeyboard,
+  keyboardAvoidBehavior,
+  useKeyboardVisible,
+} from "../utils/keyboard";
 import { useConnection } from "../hooks/useConnection";
 import { useNavigationTabs } from "../hooks/useNavigationTabs";
+import { papatClient } from "../services/websocket";
+
+interface EditorActions {
+  openFile: (path: string) => Promise<void>;
+  resetForWorkspace: () => void;
+}
+
+function EditorActionBridge({
+  actionsRef,
+}: {
+  actionsRef: React.MutableRefObject<EditorActions>;
+}) {
+  const editor = useEditor();
+
+  actionsRef.current = {
+    openFile: editor.openFile,
+    resetForWorkspace: editor.resetForWorkspace,
+  };
+
+  return null;
+}
 
 export default function MainScreen() {
   const [workspaceName, setWorkspaceName] = useState("workspace");
   const connection = useConnection();
   const insets = useSafeAreaInsets();
+  const editorActionsRef = useRef<EditorActions>({
+    openFile: async () => {},
+    resetForWorkspace: () => {},
+  });
+  const lastWorkspacePathRef = useRef<string | null>(null);
 
   const handleWorkspaceChange = useCallback(
     (path: string, name: string) => {
+      if (lastWorkspacePathRef.current && lastWorkspacePathRef.current !== path) {
+        editorActionsRef.current.resetForWorkspace();
+      }
+      lastWorkspacePathRef.current = path;
       connection.setWorkspacePath(path);
       setWorkspaceName(name);
     },
     [connection]
   );
+
+  useEffect(() => {
+    if (connection.workspacePath) {
+      lastWorkspacePathRef.current = connection.workspacePath;
+      const name =
+        connection.workspacePath.split(/[/\\]/).pop() || workspaceName;
+      if (workspaceName === "workspace") {
+        setWorkspaceName(name);
+      }
+    }
+  }, [connection.workspacePath, workspaceName]);
+
+  const handleOpenInEditor = useCallback(
+    async (path: string) => {
+      try {
+        await editorActionsRef.current.openFile(path);
+        connection.setError(null);
+      } catch (err) {
+        connection.setError(err instanceof Error ? err.message : "Failed to open file");
+      }
+    },
+    [connection]
+  );
+
+  const selectTabRef = React.useRef<(tab: TabId) => void>(() => {});
 
   const navContext = useMemo(
     () => ({
@@ -39,6 +102,11 @@ export default function MainScreen() {
       workspaceName,
       onWorkspaceChange: handleWorkspaceChange,
       onError: connection.setError,
+      onOpenInEditor: (path: string) => {
+        void handleOpenInEditor(path);
+        selectTabRef.current("code");
+      },
+      selectTab: (tab: TabId) => selectTabRef.current(tab),
     }),
     [
       connection.isConnected,
@@ -47,22 +115,75 @@ export default function MainScreen() {
       connection.setError,
       workspaceName,
       handleWorkspaceChange,
+      handleOpenInEditor,
     ]
   );
 
   const navigation = useNavigationTabs(navContext);
-  const contentInset = tabBarInset(insets.bottom);
+  selectTabRef.current = navigation.selectTab;
+
+  useEffect(() => {
+    const tab = navigation.activeTab;
+    if (!connection.isConnected || (tab !== "code" && tab !== "agent")) {
+      return;
+    }
+
+    if (!connection.workspacePath) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      const workspacePath = connection.workspacePath;
+      if (!workspacePath) return;
+
+      try {
+        const info = await papatClient.getWorkspace();
+        if (cancelled || info.path === workspacePath) {
+          return;
+        }
+        const result = await papatClient.openProject(workspacePath);
+        if (cancelled) return;
+        handleWorkspaceChange(result.path, result.name);
+      } catch (err) {
+        if (!cancelled) {
+          connection.setError(
+            err instanceof Error ? err.message : "Failed to sync project workspace"
+          );
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    navigation.activeTab,
+    connection.isConnected,
+    connection.workspacePath,
+    connection.setError,
+    handleWorkspaceChange,
+  ]);
+
+  const keyboardVisible = useKeyboardVisible();
+  const contentInset = keyboardVisible
+    ? insets.bottom
+    : tabBarInset(insets.bottom);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
+      <EditorActionBridge actionsRef={editorActionsRef} />
       <StatusBar style="light" />
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={keyboardAvoidBehavior()}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
       >
-        <View style={styles.header}>
+        <KeyboardDismissView style={styles.flex}>
+        <Pressable style={styles.header} onPress={dismissKeyboard}>
           <Text style={styles.title}>PapaT</Text>
-        </View>
+        </Pressable>
 
         <ConnectionBar
           host={connection.host}
@@ -102,13 +223,19 @@ export default function MainScreen() {
           ))}
         </View>
 
-        <LiquidGlassTabBar
-          tabs={navigation.tabs}
-          activeTab={navigation.activeTab}
-          ctx={navContext}
-          bottomInset={insets.bottom}
-          onSelectTab={navigation.selectTab}
-        />
+        {!keyboardVisible ? (
+          <LiquidGlassTabBar
+            tabs={navigation.tabs}
+            activeTab={navigation.activeTab}
+            ctx={navContext}
+            bottomInset={insets.bottom}
+            onSelectTab={(tabId) => {
+              dismissKeyboard();
+              navigation.selectTab(tabId);
+            }}
+          />
+        ) : null}
+        </KeyboardDismissView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
