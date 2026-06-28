@@ -5,11 +5,14 @@
       "name": "PapaT VS Code Extension",
       "type": "extensionHost",
       "request": "launch",
-      "runtimeExecutable": "${execPath}",
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}/vscode-extension"
       ],
-      "outFiles": ["${workspaceFolder}/vscode-extension/dist/**/*.js"]
+      "outFiles": ["${workspaceFolder}/vscode-extension/dist/**/*.js"],
+      "preLaunchTask": "Build PapaT Extension",
+      "timeout": 120000,
+      "stopOnEntry": false,
+      "sourceMaps": true
     }
   ]
 }

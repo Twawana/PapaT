@@ -2,11 +2,19 @@ import { spawn } from "child_process";
 import * as os from "os";
 import { config } from "./config";
 import { getWorkspaceRoot } from "./workspace-state";
+import type { ActiveExecution } from "./executor";
 
 export interface CommandResult {
   stdout: string;
   stderr: string;
   exitCode: number | null;
+}
+
+export interface ShellExecutionCallbacks {
+  onStdout: (data: string) => void;
+  onStderr: (data: string) => void;
+  onDone: (exitCode: number | null, signal: string | null) => void;
+  onError: (message: string) => void;
 }
 
 const BLOCKED_PATTERNS = [
@@ -101,4 +109,97 @@ export function runShellCommand(
 
 export function getDefaultShellHint(): string {
   return process.platform === "win32" ? "cmd.exe" : os.userInfo().shell || "sh";
+}
+
+export function runShellCommandStreaming(
+  command: string,
+  cwd: string,
+  callbacks: ShellExecutionCallbacks
+): ActiveExecution {
+  const trimmed = command.trim();
+  if (!trimmed) {
+    callbacks.onError("Command must not be empty");
+    return { kill: () => {} };
+  }
+
+  for (const pattern of BLOCKED_PATTERNS) {
+    if (pattern.test(trimmed)) {
+      callbacks.onError("Command is not allowed");
+      return { kill: () => {} };
+    }
+  }
+
+  const shell = process.platform === "win32" ? "cmd.exe" : "/bin/sh";
+  const shellArgs =
+    process.platform === "win32" ? ["/c", trimmed] : ["-c", trimmed];
+
+  const child = spawn(shell, shellArgs, {
+    cwd,
+    env: process.env,
+    windowsHide: true,
+  });
+
+  let killed = false;
+  let stdoutBytes = 0;
+  let stderrBytes = 0;
+
+  const timeout = setTimeout(() => {
+    if (!killed) {
+      killed = true;
+      child.kill("SIGTERM");
+      callbacks.onStderr(
+        `\n[Command timed out after ${config.commandTimeoutMs}ms]\n`
+      );
+    }
+  }, config.commandTimeoutMs);
+
+  const appendChunk = (
+    chunk: string,
+    stream: "stdout" | "stderr",
+    onChunk: (data: string) => void
+  ) => {
+    const max = config.maxCommandOutputBytes;
+    const current = stream === "stdout" ? stdoutBytes : stderrBytes;
+    if (current >= max) return;
+
+    const allowed = max - current;
+    const slice = chunk.length > allowed ? chunk.slice(0, allowed) : chunk;
+    if (stream === "stdout") {
+      stdoutBytes += slice.length;
+    } else {
+      stderrBytes += slice.length;
+    }
+    onChunk(slice);
+    if (chunk.length > allowed) {
+      onChunk("\n[output truncated]\n");
+    }
+  };
+
+  child.stdout?.on("data", (chunk: Buffer) => {
+    appendChunk(chunk.toString("utf-8"), "stdout", callbacks.onStdout);
+  });
+
+  child.stderr?.on("data", (chunk: Buffer) => {
+    appendChunk(chunk.toString("utf-8"), "stderr", callbacks.onStderr);
+  });
+
+  child.on("error", (err) => {
+    clearTimeout(timeout);
+    callbacks.onError(err.message);
+  });
+
+  child.on("close", (exitCode, signal) => {
+    clearTimeout(timeout);
+    callbacks.onDone(exitCode, signal);
+  });
+
+  return {
+    kill: () => {
+      if (!killed) {
+        killed = true;
+        clearTimeout(timeout);
+        child.kill("SIGTERM");
+      }
+    },
+  };
 }

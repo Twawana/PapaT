@@ -9,7 +9,7 @@ mobile/          React Native (Expo) app — code editor, file explorer, termina
 host-server/     Node.js WebSocket server — executes JS and manages workspace files on your PC
 ```
 
-The PC workspace (`PAPAT_WORKSPACE`) is the source of truth. The mobile **Files** tab lists, reads, edits, and deletes files on your PC in real time.
+The PC workspace (`PAPAT_WORKSPACE`) is the default file root. The mobile **Files** tab can also browse any allowed folder on your PC (home directory and drives), edit files in place, and create, rename, move, or delete files and folders.
 
 ## Quick Start
 
@@ -40,7 +40,7 @@ npx expo start
 - Enter your PC's IP address in the connection bar
 - Tap **Connect**
 - **Code** tab — write JavaScript and tap **Run**
-- **Files** tab — browse, edit, create, and delete files in your PC workspace
+- **Files** tab — browse workspace or any PC folder, edit files, create/rename/move/delete
 
 ### 3. Test from CLI (optional)
 
@@ -65,6 +65,39 @@ node scripts/test-client.js
 | `OPENAI_API_KEY` | — | OpenAI API key (only if `PAPAT_LLM_PROVIDER=openai`) |
 | `PAPAT_LLM_MODEL` | `gpt-4o-mini` | OpenAI model when using OpenAI provider |
 | `PAPAT_AGENT_MAX_TURNS` | `15` | Max tool-calling loops per message (OpenAI provider only) |
+| `PAPAT_REQUIRE_AUTH` | `true` | Require QR pairing / device token for mobile clients |
+| `PAPAT_PAIRING_TTL_MS` | `120000` | Pairing code lifetime (ms); QR refreshes on host |
+
+## Auth & QR Pairing (MVP 6)
+
+By default, the host **requires authentication**. Unpaired clients cannot read files, run code, or use the agent.
+
+### Pair your phone
+
+1. Start the host — a **QR code** prints in the terminal (refreshes every 2 minutes)
+2. Open the PapaT app → tap **Scan QR**
+3. Point your camera at the QR on your PC
+4. Your phone is paired and receives a secure token stored in the device keychain
+
+After pairing, tap **Connect** to reconnect using the saved token (no QR needed).
+
+### Manual pairing
+
+If scanning fails, enter on your phone:
+
+- **Host:** your PC LAN IP (shown in the terminal)
+- **Port:** `3847`
+- **Code:** the 6-character code shown under the QR
+
+Then tap **Scan QR** is not needed — use the code from terminal with a future manual-code UI, or scan JSON from terminal.
+
+### Disable auth (development only)
+
+```bash
+PAPAT_REQUIRE_AUTH=false npm start
+```
+
+Paired device tokens are stored in `%USERPROFILE%\.papat\tokens.json` on the PC.
 
 ## VS Code Integration (MVP 7)
 
@@ -78,14 +111,30 @@ PapaT connects **directly to VS Code** through a companion extension. When linke
 ### Install the VS Code extension
 
 1. Start the PapaT host on your PC (`host-server`)
-2. Build the extension:
+2. **Open the repo root** `PapaT` in VS Code or Cursor (not the `mobile` or `host-server` subfolder)
+3. Build the extension:
    ```bash
    cd vscode-extension
    npm install
    npm run build
    ```
-3. In VS Code: **Run and Debug** → **Launch Extension** (or install the `.vsix` after packaging)
-4. The status bar shows **PapaT: connected** when linked to `ws://127.0.0.1:3847`
+4. **Run and Debug** → **PapaT VS Code Extension** → **F5**
+
+   If you see *“Extension host did not start in 10 seconds”*:
+   - Turn off **Stop on Entry** in the Debug toolbar (pause icon with a dot)
+   - Remove breakpoints in `vscode-extension/src`
+   - Make sure the workspace folder is the **PapaT repo root**
+   - Retry — the launch config waits up to 2 minutes and rebuilds first
+
+5. A **second window** opens with the extension loaded. The status bar shows **PapaT: connected** when linked to `ws://127.0.0.1:3847`
+
+**Without debugging (easier):** package and install a `.vsix`:
+```bash
+cd vscode-extension
+npm install && npm run build
+npx @vscode/vsce package
+```
+Then in VS Code/Cursor: **Extensions** → **⋯** → **Install from VSIX…**
 
 Extension settings (`papat.host`, `papat.port`, `papat.autoConnect`) are in VS Code Settings.
 
@@ -134,7 +183,7 @@ All paths are relative to `PAPAT_WORKSPACE`. The mobile app syncs on demand (lis
 - [ ] **MVP 3** — Mobile code editor enhancements
 - [x] **MVP 4** — AI agent with tool calling
 - [ ] **MVP 5** — Python + multi-language
-- [ ] **MVP 6** — Auth & QR pairing
+- [x] **MVP 6** — Auth & QR pairing
 - [x] **MVP 7** — VS Code extension (direct WebSocket bridge)
 
 ## License

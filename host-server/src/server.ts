@@ -1,12 +1,32 @@
 import * as os from "os";
 import { randomUUID } from "crypto";
 import { WebSocket, WebSocketServer } from "ws";
+import { IncomingMessage } from "http";
 import { config } from "./config";
-import { executeJavaScript } from "./executor";
+import {
+  authenticateToken,
+  initAuth,
+  isAuthRequired,
+  pairWithCode,
+} from "./auth";
+import {
+  clearClientAuth,
+  isClientAuthenticated,
+  isLocalConnection,
+  markClientAuthenticated,
+} from "./client-auth";
+import { executeJavaScript, type ActiveExecution } from "./executor";
+import { runShellCommandStreaming } from "./command-executor";
+import {
+  clearShellSession,
+  getShellSession,
+  tryHandleCd,
+} from "./shell-session";
 import {
   deletePath,
   listDirectory,
   mkdir,
+  movePath,
   readFile,
   writeFile,
 } from "./filesystem";
@@ -24,10 +44,12 @@ import {
   ServerMessage,
 } from "./protocol";
 import { initWorkspace, getWorkspaceRoot } from "./workspace-state";
+import { resolveFsPath, toClientPath } from "./path-utils";
 import {
   cancelAgent,
   clearAgentSession,
   getAgentHistory,
+  listAgentSessions,
   runAgentTurn,
 } from "./agent/loop";
 import {
@@ -41,11 +63,49 @@ import {
   updateVscodeClientStatus,
 } from "./vscode-bridge";
 
-const SERVER_VERSION = "0.5.0";
+const SERVER_VERSION = "0.6.0";
 const SERVER_ID = randomUUID();
+
+const UNAUTHENTICATED_TYPES = new Set(["ping", "auth", "pair"]);
+const activeShellRuns = new WeakMap<WebSocket, Map<string, ActiveExecution>>();
+
+function buildConnectedMessage(deviceName?: string): Extract<
+  import("./protocol").ServerMessage,
+  { type: "connected" }
+> {
+  return {
+    type: "connected",
+    serverId: SERVER_ID,
+    version: SERVER_VERSION,
+    hostname: os.hostname(),
+    workspace: getWorkspaceRoot(),
+    authenticated: true,
+    deviceName,
+    vscode: getVscodeStatus(),
+  };
+}
+
+function buildAuthOkMessage(
+  deviceId: string,
+  deviceName: string,
+  token?: string
+): Extract<import("./protocol").ServerMessage, { type: "auth_ok" }> {
+  return {
+    type: "auth_ok",
+    serverId: SERVER_ID,
+    version: SERVER_VERSION,
+    hostname: os.hostname(),
+    workspace: getWorkspaceRoot(),
+    deviceId,
+    deviceName,
+    token,
+    vscode: getVscodeStatus(),
+  };
+}
 
 export function createServer(): WebSocketServer {
   initWorkspace();
+  initAuth();
 
   const wss = new WebSocketServer({
     host: config.host,
@@ -67,18 +127,24 @@ export function createServer(): WebSocketServer {
     `[PapaT Host] Listening on ws://${config.host}:${config.port} (workspace: ${getWorkspaceRoot()})`
   );
 
-  wss.on("connection", (ws: WebSocket) => {
+  wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
     const clientId = randomUUID().slice(0, 8);
     console.log(`[PapaT Host] Client connected: ${clientId}`);
 
-    send(ws, {
-      type: "connected",
-      serverId: SERVER_ID,
-      version: SERVER_VERSION,
-      hostname: os.hostname(),
-      workspace: getWorkspaceRoot(),
-      vscode: getVscodeStatus(),
-    });
+    if (isAuthRequired()) {
+      send(ws, {
+        type: "auth_required",
+        serverId: SERVER_ID,
+        version: SERVER_VERSION,
+        hostname: os.hostname(),
+      });
+    } else {
+      markClientAuthenticated(ws, {
+        deviceId: clientId,
+        deviceName: "Guest",
+      });
+      send(ws, buildConnectedMessage("Guest"));
+    }
 
     ws.on("message", (data) => {
       const raw = data.toString("utf-8");
@@ -89,11 +155,14 @@ export function createServer(): WebSocketServer {
         return;
       }
 
-      handleMessage(ws, message);
+      handleMessage(ws, message, req);
     });
 
     ws.on("close", () => {
+      cancelAllShellRuns(ws);
+      clearShellSession(ws);
       unregisterVscodeClient(ws);
+      clearClientAuth(ws);
       console.log(`[PapaT Host] Client disconnected: ${clientId}`);
     });
 
@@ -111,14 +180,51 @@ function send(ws: WebSocket, message: ServerMessage): void {
   }
 }
 
-function handleMessage(ws: WebSocket, message: ClientMessage): void {
+function handleMessage(
+  ws: WebSocket,
+  message: ClientMessage,
+  req?: IncomingMessage
+): void {
+  if (
+    isAuthRequired() &&
+    !isClientAuthenticated(ws) &&
+    !UNAUTHENTICATED_TYPES.has(message.type)
+  ) {
+    if (message.type === "vscode_register" && isLocalConnection(req)) {
+      markClientAuthenticated(ws, {
+        deviceId: "vscode-local",
+        deviceName: "VS Code",
+        isVscode: true,
+      });
+    } else {
+      send(ws, { type: "auth_error", message: "Authentication required" });
+      return;
+    }
+  }
+
   switch (message.type) {
+    case "auth":
+      handleAuth(ws, message.token);
+      break;
+
+    case "pair":
+      handlePair(ws, message.code, message.deviceName);
+      break;
+
     case "ping":
       send(ws, { type: "pong" });
       break;
 
     case "execute":
       handleExecute(ws, message.id, message.code, message.language);
+      break;
+
+    case "shell_run":
+      handleShellRun(ws, message.id, message.command);
+      break;
+
+    case "shell_cancel":
+      handleShellCancel(ws, message.id);
       break;
 
     case "fs_list":
@@ -139,6 +245,10 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
 
     case "fs_mkdir":
       handleFsMkdir(ws, message.id, message.path);
+      break;
+
+    case "fs_move":
+      handleFsMove(ws, message.id, message.from, message.to);
       break;
 
     case "workspace_recent":
@@ -177,8 +287,12 @@ function handleMessage(ws: WebSocket, message: ClientMessage): void {
       handleAgentClear(ws, message.id, message.sessionId);
       break;
 
+    case "agent_sessions":
+      handleAgentSessions(ws, message.id);
+      break;
+
     case "vscode_register":
-      handleVscodeRegister(ws, message.workspaceFolders);
+      handleVscodeRegister(ws, message.workspaceFolders, req);
       break;
 
     case "vscode_status":
@@ -239,6 +353,101 @@ function handleExecute(
   });
 }
 
+function getShellRunMap(ws: WebSocket): Map<string, ActiveExecution> {
+  let map = activeShellRuns.get(ws);
+  if (!map) {
+    map = new Map();
+    activeShellRuns.set(ws, map);
+  }
+  return map;
+}
+
+function cancelAllShellRuns(ws: WebSocket): void {
+  const map = activeShellRuns.get(ws);
+  if (!map) return;
+  for (const active of map.values()) {
+    active.kill();
+  }
+  map.clear();
+}
+
+function handleShellRun(ws: WebSocket, id: string, command: string): void {
+  if (!id || typeof id !== "string") {
+    send(ws, { type: "error", message: "Missing shell run id" });
+    return;
+  }
+
+  if (!command || typeof command !== "string") {
+    send(ws, { type: "error", id, message: "Command must be a non-empty string" });
+    return;
+  }
+
+  if (command.length > 8_000) {
+    send(ws, { type: "error", id, message: "Command exceeds 8KB limit" });
+    return;
+  }
+
+  const session = getShellSession(ws);
+  const cdResult = tryHandleCd(command, session);
+
+  if (cdResult.handled) {
+    if (cdResult.output) {
+      send(ws, {
+        type: "output",
+        id,
+        stream: "stdout",
+        data: cdResult.output,
+      });
+    }
+    send(ws, {
+      type: "done",
+      id,
+      exitCode: cdResult.exitCode ?? 0,
+      signal: null,
+      cwd: session.cwd,
+    });
+    return;
+  }
+
+  console.log(`[PapaT Host] Shell ${id}: ${command.trim().slice(0, 80)}`);
+
+  const active = runShellCommandStreaming(command, session.cwd, {
+    onStdout: (data) => send(ws, { type: "output", id, stream: "stdout", data }),
+    onStderr: (data) => send(ws, { type: "output", id, stream: "stderr", data }),
+    onError: (message) => send(ws, { type: "error", id, message }),
+    onDone: (exitCode, signal) => {
+      getShellRunMap(ws).delete(id);
+      send(ws, { type: "done", id, exitCode, signal, cwd: session.cwd });
+    },
+  });
+
+  getShellRunMap(ws).set(id, active);
+}
+
+function handleShellCancel(ws: WebSocket, id: string): void {
+  if (!id || typeof id !== "string") {
+    send(ws, { type: "error", message: "Missing shell cancel id" });
+    return;
+  }
+
+  const active = getShellRunMap(ws).get(id);
+  if (!active) {
+    send(ws, { type: "error", id, message: "No active shell command for this id" });
+    return;
+  }
+
+  active.kill();
+  getShellRunMap(ws).delete(id);
+  const session = getShellSession(ws);
+  send(ws, {
+    type: "done",
+    id,
+    exitCode: null,
+    signal: "SIGTERM",
+    cwd: session.cwd,
+  });
+}
+
 function requireRequestId(ws: WebSocket, id: unknown): id is string {
   if (!id || typeof id !== "string") {
     send(ws, { type: "error", message: "Missing request id" });
@@ -260,7 +469,8 @@ async function handleFsList(ws: WebSocket, id: string, filePath: string): Promis
 
   try {
     const entries = await listDirectory(filePath);
-    send(ws, { type: "fs_list_result", id, path: filePath || ".", entries });
+    const canonicalPath = toClientPath(resolveFsPath(filePath));
+    send(ws, { type: "fs_list_result", id, path: canonicalPath, entries });
   } catch (err) {
     send(ws, {
       type: "error",
@@ -336,6 +546,27 @@ async function handleFsMkdir(ws: WebSocket, id: string, filePath: string): Promi
       type: "error",
       id,
       message: err instanceof Error ? err.message : "Failed to create directory",
+    });
+  }
+}
+
+async function handleFsMove(
+  ws: WebSocket,
+  id: string,
+  fromPath: string,
+  toPath: string
+): Promise<void> {
+  if (!requireRequestId(ws, id)) return;
+  if (!requirePath(ws, id, fromPath) || !requirePath(ws, id, toPath)) return;
+
+  try {
+    const result = await movePath(fromPath, toPath);
+    send(ws, { type: "fs_move_result", id, ...result });
+  } catch (err) {
+    send(ws, {
+      type: "error",
+      id,
+      message: err instanceof Error ? err.message : "Failed to move path",
     });
   }
 }
@@ -475,10 +706,88 @@ function handleAgentClear(ws: WebSocket, id: string, sessionId: string): void {
   send(ws, { type: "agent_history_result", id, sessionId, messages: [] });
 }
 
-function handleVscodeRegister(ws: WebSocket, workspaceFolders: string[]): void {
+function handleAgentSessions(ws: WebSocket, id: string): void {
+  if (!requireRequestId(ws, id)) return;
+
+  send(ws, {
+    type: "agent_sessions_result",
+    id,
+    sessions: listAgentSessions(),
+  });
+}
+
+function handleAuth(ws: WebSocket, token: string): void {
+  if (!token || typeof token !== "string") {
+    send(ws, { type: "auth_error", message: "Missing token" });
+    return;
+  }
+
+  const result = authenticateToken(token);
+  if (!result) {
+    send(ws, { type: "auth_error", message: "Invalid or revoked token" });
+    return;
+  }
+
+  markClientAuthenticated(ws, {
+    deviceId: result.deviceId,
+    deviceName: result.deviceName,
+  });
+
+  console.log(`[PapaT Host] Authenticated: ${result.deviceName}`);
+  send(ws, buildAuthOkMessage(result.deviceId, result.deviceName));
+}
+
+function handlePair(ws: WebSocket, code: string, deviceName?: string): void {
+  if (!code || typeof code !== "string") {
+    send(ws, { type: "auth_error", message: "Missing pairing code" });
+    return;
+  }
+
+  try {
+    const result = pairWithCode(code, deviceName);
+    markClientAuthenticated(ws, {
+      deviceId: result.deviceId,
+      deviceName: result.deviceName,
+    });
+
+    console.log(`[PapaT Host] Paired new device: ${result.deviceName}`);
+    send(
+      ws,
+      buildAuthOkMessage(
+        result.deviceId,
+        result.deviceName,
+        result.token
+      )
+    );
+  } catch (err) {
+    send(ws, {
+      type: "auth_error",
+      message: err instanceof Error ? err.message : "Pairing failed",
+    });
+  }
+}
+
+function handleVscodeRegister(
+  ws: WebSocket,
+  workspaceFolders: string[],
+  req?: IncomingMessage
+): void {
   if (!Array.isArray(workspaceFolders)) {
     send(ws, { type: "error", message: "workspaceFolders must be an array" });
     return;
+  }
+
+  if (isAuthRequired() && !isClientAuthenticated(ws)) {
+    if (isLocalConnection(req)) {
+      markClientAuthenticated(ws, {
+        deviceId: "vscode-local",
+        deviceName: "VS Code",
+        isVscode: true,
+      });
+    } else {
+      send(ws, { type: "auth_error", message: "Authentication required" });
+      return;
+    }
   }
 
   registerVscodeClient(ws, workspaceFolders);

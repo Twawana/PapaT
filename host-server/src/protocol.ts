@@ -42,9 +42,18 @@ export interface AgentChatMessage {
   timestamp?: number;
 }
 
+export interface AgentSessionSummary {
+  sessionId: string;
+  title: string;
+  updatedAt: number;
+  messageCount: number;
+}
+
 export type ClientMessage =
   | { type: "ping" }
   | { type: "execute"; id: string; code: string; language: "javascript" }
+  | { type: "shell_run"; id: string; command: string }
+  | { type: "shell_cancel"; id: string }
   | { type: "fs_list"; id: string; path: string }
   | { type: "fs_read"; id: string; path: string }
   | {
@@ -56,6 +65,7 @@ export type ClientMessage =
     }
   | { type: "fs_delete"; id: string; path: string }
   | { type: "fs_mkdir"; id: string; path: string }
+  | { type: "fs_move"; id: string; from: string; to: string }
   | { type: "workspace_recent"; id: string }
   | { type: "workspace_get"; id: string }
   | { type: "browse_roots"; id: string }
@@ -70,10 +80,13 @@ export type ClientMessage =
   | { type: "agent_cancel"; sessionId: string }
   | { type: "agent_history"; id: string; sessionId: string }
   | { type: "agent_clear"; id: string; sessionId: string }
+  | { type: "agent_sessions"; id: string }
   | { type: "vscode_register"; workspaceFolders: string[]; extensionVersion?: string }
   | { type: "vscode_status"; activeFile?: string | null; workspaceFolders?: string[] }
   | { type: "vscode_get_status"; id: string }
-  | { type: "vscode_open_file"; id: string; path: string };
+  | { type: "vscode_open_file"; id: string; path: string }
+  | { type: "auth"; token: string }
+  | { type: "pair"; code: string; deviceName?: string };
 
 export type VscodeCommand = "open_file" | "open_folder" | "reveal";
 
@@ -84,6 +97,8 @@ export type ServerMessage =
       version: string;
       hostname: string;
       workspace: string;
+      authenticated?: boolean;
+      deviceName?: string;
       vscode?: {
         connected: boolean;
         workspaceFolders?: string[];
@@ -97,7 +112,7 @@ export type ServerMessage =
       stream: "stdout" | "stderr";
       data: string;
     }
-  | { type: "done"; id: string; exitCode: number | null; signal: string | null }
+  | { type: "done"; id: string; exitCode: number | null; signal: string | null; cwd?: string }
   | { type: "error"; id?: string; message: string }
   | { type: "fs_list_result"; id: string; path: string; entries: FileEntry[] }
   | {
@@ -117,6 +132,7 @@ export type ServerMessage =
     }
   | { type: "fs_delete_result"; id: string; path: string }
   | { type: "fs_mkdir_result"; id: string; path: string }
+  | { type: "fs_move_result"; id: string; from: string; to: string }
   | {
       type: "workspace_recent_result";
       id: string;
@@ -163,6 +179,11 @@ export type ServerMessage =
       messages: AgentChatMessage[];
     }
   | {
+      type: "agent_sessions_result";
+      id: string;
+      sessions: AgentSessionSummary[];
+    }
+  | {
       type: "agent_error";
       id?: string;
       sessionId?: string;
@@ -186,7 +207,29 @@ export type ServerMessage =
       workspaceFolders?: string[];
       activeFile?: string | null;
     }
-  | { type: "vscode_open_file_result"; id: string; ok: boolean; message?: string };
+  | { type: "vscode_open_file_result"; id: string; ok: boolean; message?: string }
+  | {
+      type: "auth_required";
+      serverId: string;
+      version: string;
+      hostname: string;
+    }
+  | {
+      type: "auth_ok";
+      serverId: string;
+      version: string;
+      hostname: string;
+      workspace: string;
+      deviceId: string;
+      deviceName: string;
+      token?: string;
+      vscode?: {
+        connected: boolean;
+        workspaceFolders?: string[];
+        activeFile?: string | null;
+      };
+    }
+  | { type: "auth_error"; message: string };
 
 export function parseClientMessage(raw: string): ClientMessage | null {
   try {

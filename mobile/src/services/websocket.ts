@@ -3,6 +3,12 @@ import { ClientMessage, EditorId, ServerMessage } from "../types/protocol";
 type MessageHandler = (message: ServerMessage) => void;
 type StatusHandler = (status: "open" | "close" | "error", detail?: string) => void;
 
+export interface ConnectOptions {
+  token?: string;
+  pairingCode?: string;
+  deviceName?: string;
+}
+
 interface PendingRequest {
   expectedTypes: string[];
   resolve: (message: ServerMessage) => void;
@@ -21,6 +27,10 @@ function createRequestId(prefix: string): string {
 export class PapaTClient {
   private ws: WebSocket | null = null;
   private url = "";
+  private authenticated = false;
+  private pendingConnect: ConnectOptions | null = null;
+  private lastConnectHost = "";
+  private lastConnectPort = 0;
   private messageListeners = new Set<MessageHandler>();
   private statusListeners = new Set<StatusHandler>();
   private pendingRequests = new Map<string, PendingRequest>();
@@ -50,11 +60,15 @@ export class PapaTClient {
 
   private _legacyCleanup: (() => void) | null = null;
 
-  connect(host: string, port: number): void {
+  connect(host: string, port: number, options: ConnectOptions = {}): void {
     this.disconnect();
 
     const trimmed = host.trim().replace(/^ws:\/\//, "");
+    this.lastConnectHost = trimmed;
+    this.lastConnectPort = port;
     this.url = `ws://${trimmed}:${port}`;
+    this.authenticated = false;
+    this.pendingConnect = options;
 
     this.emitStatus("open", "connecting");
 
@@ -62,12 +76,31 @@ export class PapaTClient {
     this.ws = ws;
 
     ws.onopen = () => {
-      this.emitStatus("open");
+      this.emitStatus("open", "authenticating");
     };
 
     ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data as string) as ServerMessage;
+
+        if (message.type === "auth_required") {
+          this.handleAuthRequired();
+          return;
+        }
+
+        if (message.type === "auth_ok") {
+          this.authenticated = true;
+          this.pendingConnect = null;
+        }
+
+        if (message.type === "connected" && message.authenticated !== false) {
+          this.authenticated = true;
+        }
+
+        if (message.type === "auth_error") {
+          this.emitStatus("error", message.message);
+        }
+
         if (this.tryResolvePending(message)) {
           return;
         }
@@ -95,15 +128,46 @@ export class PapaTClient {
       this.ws.close();
       this.ws = null;
     }
+    this.authenticated = false;
+    this.pendingConnect = null;
     this.rejectAllPending("Disconnected");
   }
 
   isConnected(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN && this.authenticated;
+  }
+
+  isSocketOpen(): boolean {
     return this.ws?.readyState === WebSocket.OPEN;
   }
 
+  getConnectTarget(): { host: string; port: number } {
+    return { host: this.lastConnectHost, port: this.lastConnectPort };
+  }
+
+  private handleAuthRequired(): void {
+    const options = this.pendingConnect ?? {};
+
+    if (options.pairingCode) {
+      this.send({
+        type: "pair",
+        code: options.pairingCode.trim().toUpperCase(),
+        deviceName: options.deviceName,
+      });
+      return;
+    }
+
+    if (options.token) {
+      this.send({ type: "auth", token: options.token });
+      return;
+    }
+
+    this.emitStatus("error", "Pairing required — scan the QR code on your PC");
+    this.disconnect();
+  }
+
   send(message: ClientMessage): void {
-    if (!this.isConnected()) {
+    if (!this.isSocketOpen()) {
       throw new Error("Not connected to host");
     }
     this.ws!.send(JSON.stringify(message));
@@ -115,6 +179,14 @@ export class PapaTClient {
 
   execute(id: string, code: string): void {
     this.send({ type: "execute", id, code, language: "javascript" });
+  }
+
+  shellRun(id: string, command: string): void {
+    this.send({ type: "shell_run", id, command });
+  }
+
+  shellCancel(id: string): void {
+    this.send({ type: "shell_cancel", id });
   }
 
   listDir(path: string): Promise<Extract<ServerMessage, { type: "fs_list_result" }>> {
@@ -148,6 +220,14 @@ export class PapaTClient {
   mkdir(path: string): Promise<Extract<ServerMessage, { type: "fs_mkdir_result" }>> {
     const id = createRequestId("fs-mkdir");
     return this.request(id, { type: "fs_mkdir", id, path }, ["fs_mkdir_result"]);
+  }
+
+  movePath(
+    from: string,
+    to: string
+  ): Promise<Extract<ServerMessage, { type: "fs_move_result" }>> {
+    const id = createRequestId("fs-move");
+    return this.request(id, { type: "fs_move", id, from, to }, ["fs_move_result"]);
   }
 
   getWorkspaceRecent(): Promise<
@@ -218,6 +298,15 @@ export class PapaTClient {
     );
   }
 
+  listAgentSessions(): Promise<
+    Extract<ServerMessage, { type: "agent_sessions_result" }>
+  > {
+    const id = createRequestId("agent-sessions");
+    return this.request(id, { type: "agent_sessions", id }, [
+      "agent_sessions_result",
+    ]);
+  }
+
   getVscodeStatus(): Promise<
     Extract<ServerMessage, { type: "vscode_get_status_result" }>
   > {
@@ -248,7 +337,7 @@ export class PapaTClient {
     expectedTypes: string[],
     timeoutMs = 30_000
   ): Promise<T> {
-    if (!this.isConnected()) {
+    if (!this.isSocketOpen()) {
       return Promise.reject(new Error("Not connected to host"));
     }
 
@@ -293,7 +382,6 @@ export class PapaTClient {
         clearTimeout(pending.timer);
         this.pendingRequests.delete(message.id);
         pending.reject(new Error(message.message));
-        return true;
       }
       return false;
     }

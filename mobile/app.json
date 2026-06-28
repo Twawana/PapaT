@@ -27,7 +27,14 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow PapaT to scan the pairing QR code on your PC."
+        }
+      ],
+      "expo-secure-store"
     ]
   }
 }

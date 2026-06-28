@@ -1,0 +1,16 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build PapaT Extension",
+      "type": "npm",
+      "script": "build",
+      "path": "vscode-extension",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$tsc"]
+    }
+  ]
+}

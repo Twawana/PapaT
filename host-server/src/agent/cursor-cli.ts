@@ -1,4 +1,5 @@
 import { spawn, ChildProcess, execFileSync } from "child_process";
+import { randomUUID } from "crypto";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -81,6 +82,47 @@ export function resolveAgentCommand(): string {
   return command;
 }
 
+let streamToolSeq = 0;
+
+function resetStreamToolIds(): void {
+  streamToolSeq = 0;
+}
+
+function nextStreamToolId(): string {
+  streamToolSeq += 1;
+  return `tool-${streamToolSeq}-${randomUUID().slice(0, 8)}`;
+}
+
+export function appendStreamText(current: string, chunk: string): string {
+  if (!chunk) return current;
+  if (!current) return chunk;
+  if (chunk === current) return current;
+  if (chunk.length >= current.length && chunk.startsWith(current)) {
+    return chunk;
+  }
+  return current + chunk;
+}
+
+const AUTH_CACHE_TTL_MS = 10 * 60 * 1000;
+
+let authCache: { ok: boolean; message: string; expiresAt: number } | null = null;
+
+export function clearCursorAuthCache(): void {
+  authCache = null;
+}
+
+function cacheAuthResult(ok: boolean, message: string): void {
+  if (ok) {
+    authCache = {
+      ok: true,
+      message,
+      expiresAt: Date.now() + AUTH_CACHE_TTL_MS,
+    };
+    return;
+  }
+  authCache = null;
+}
+
 function spawnEnv(apiKey?: string): NodeJS.ProcessEnv {
   const env = { ...process.env };
   const key = apiKey || config.cursorApiKey;
@@ -99,18 +141,70 @@ interface RunCommandOptions {
   registerChild?: (child: ChildProcess) => void;
 }
 
+interface AgentSpawnTarget {
+  command: string;
+  argsPrefix: string[];
+}
+
+/** Run Cursor CLI without shell so paths with spaces stay intact on Windows. */
+function resolveAgentSpawnTarget(command: string): AgentSpawnTarget {
+  if (process.platform === "win32" && /\.(cmd|bat)$/i.test(command)) {
+    const scriptDir = path.dirname(command);
+    const ps1 = path.join(scriptDir, "cursor-agent.ps1");
+    if (fs.existsSync(ps1)) {
+      const systemRoot = process.env.SystemRoot || "C:\\Windows";
+      return {
+        command: path.join(
+          systemRoot,
+          "System32",
+          "WindowsPowerShell",
+          "v1.0",
+          "powershell.exe"
+        ),
+        argsPrefix: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1],
+      };
+    }
+  }
+
+  return { command, argsPrefix: [] };
+}
+
+function spawnAgentProcess(
+  command: string,
+  args: string[],
+  options: {
+    cwd?: string;
+    env?: NodeJS.ProcessEnv;
+    windowsHide?: boolean;
+  }
+): ChildProcess {
+  const { command: executable, argsPrefix } = resolveAgentSpawnTarget(command);
+
+  return spawn(executable, [...argsPrefix, ...args], {
+    cwd: options.cwd,
+    env: options.env,
+    shell: false,
+    windowsHide: options.windowsHide ?? true,
+  });
+}
+
 function runCommand(
   command: string,
   args: string[],
   options: RunCommandOptions = {}
 ): Promise<{ stdout: string; stderr: string; code: number | null }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd: options.cwd,
-      env: spawnEnv(options.apiKey),
-      shell: false,
-      windowsHide: true,
-    });
+    let child: ChildProcess;
+    try {
+      child = spawnAgentProcess(command, args, {
+        cwd: options.cwd,
+        env: spawnEnv(options.apiKey),
+        windowsHide: true,
+      });
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error("Failed to start Cursor CLI"));
+      return;
+    }
 
     options.registerChild?.(child);
 
@@ -155,13 +249,13 @@ function runCommand(
 
     options.signal?.addEventListener("abort", onAbort, { once: true });
 
-    child.stdout.on("data", (chunk: Buffer | string) => {
+    child.stdout?.on("data", (chunk: Buffer | string) => {
       const text = chunk.toString();
       stdout += text;
       options.onStdout?.(text);
     });
 
-    child.stderr.on("data", (chunk: Buffer | string) => {
+    child.stderr?.on("data", (chunk: Buffer | string) => {
       stderr += chunk.toString();
     });
 
@@ -185,10 +279,22 @@ function runCommand(
   });
 }
 
-export async function checkCursorAuth(signal?: AbortSignal): Promise<{
+export async function checkCursorAuth(
+  signal?: AbortSignal,
+  options?: { force?: boolean }
+): Promise<{
   ok: boolean;
   message: string;
 }> {
+  if (
+    !options?.force &&
+    authCache &&
+    authCache.ok &&
+    Date.now() < authCache.expiresAt
+  ) {
+    return { ok: authCache.ok, message: authCache.message };
+  }
+
   const command = findAgentCommand();
   if (!command) {
     return {
@@ -201,7 +307,7 @@ export async function checkCursorAuth(signal?: AbortSignal): Promise<{
   try {
     const { stdout, stderr, code } = await runCommand(command, ["status"], {
       signal,
-      timeoutMs: 20_000,
+      timeoutMs: 90_000,
     });
 
     const output = `${stdout}\n${stderr}`.trim();
@@ -217,18 +323,18 @@ export async function checkCursorAuth(signal?: AbortSignal): Promise<{
           ? "Install: irm 'https://cursor.com/install?win32=true' | iex. Then run: agent login"
           : "Install: curl https://cursor.com/install -fsS | bash. Then run: agent login";
 
-      return {
-        ok: false,
-        message: `Cursor CLI is not authenticated. Run "agent login" on your PC. ${installHint}`,
-      };
+      const message = `Cursor CLI is not authenticated. Run "agent login" on your PC. ${installHint}`;
+      cacheAuthResult(false, message);
+      return { ok: false, message };
     }
 
-    return { ok: true, message: output || "Authenticated with Cursor" };
+    const message = output || "Authenticated with Cursor";
+    cacheAuthResult(true, message);
+    return { ok: true, message };
   } catch (err) {
-    return {
-      ok: false,
-      message: err instanceof Error ? err.message : "Cursor CLI unavailable",
-    };
+    const message = err instanceof Error ? err.message : "Cursor CLI unavailable";
+    cacheAuthResult(false, message);
+    return { ok: false, message };
   }
 }
 
@@ -236,7 +342,7 @@ export async function createCursorChat(signal?: AbortSignal): Promise<string> {
   const command = resolveAgentCommand();
   const { stdout, stderr, code } = await runCommand(command, ["create-chat"], {
     signal,
-    timeoutMs: 30_000,
+    timeoutMs: 90_000,
   });
 
   if (code !== 0) {
@@ -311,11 +417,16 @@ export function parseCursorStreamLine(line: string): CursorStreamEvent | null {
       }
     }
 
+    if (type === "result" && typeof obj.result === "string" && obj.result.trim()) {
+      return { kind: "text", text: obj.result };
+    }
+
     if (type === "tool_call" || type === "tool_use") {
       const toolCallId =
         (typeof obj.id === "string" && obj.id) ||
+        (typeof obj.call_id === "string" && obj.call_id) ||
         (typeof obj.tool_call_id === "string" && obj.tool_call_id) ||
-        `tool-${Date.now()}`;
+        nextStreamToolId();
       const name =
         (typeof obj.name === "string" && obj.name) ||
         (typeof obj.tool === "string" && obj.tool) ||
@@ -327,8 +438,9 @@ export function parseCursorStreamLine(line: string): CursorStreamEvent | null {
     if (type === "tool_result" || type === "tool_output") {
       const toolCallId =
         (typeof obj.tool_call_id === "string" && obj.tool_call_id) ||
+        (typeof obj.call_id === "string" && obj.call_id) ||
         (typeof obj.id === "string" && obj.id) ||
-        `tool-${Date.now()}`;
+        nextStreamToolId();
       const name = typeof obj.name === "string" ? obj.name : "tool";
       const result =
         typeof obj.result === "string"
@@ -379,13 +491,14 @@ export async function runCursorAgent(
 
   args.push(options.prompt);
 
+  resetStreamToolIds();
   let buffer = "";
   let streamedText = "";
 
   const { stdout, stderr, code } = await runCommand(command, args, {
     signal: options.signal,
     cwd: options.workspace,
-    timeoutMs: config.commandTimeoutMs * 3,
+    timeoutMs: config.agentTimeoutMs,
     registerChild: options.registerChild,
     onStdout: (chunk) => {
       buffer += chunk;
@@ -397,7 +510,7 @@ export async function runCursorAgent(
         if (!event) continue;
 
         if (event.kind === "text" && event.text) {
-          streamedText += event.text;
+          streamedText = appendStreamText(streamedText, event.text);
         }
 
         options.onStreamEvent?.(event);
@@ -408,7 +521,7 @@ export async function runCursorAgent(
   if (buffer.trim()) {
     const event = parseCursorStreamLine(buffer);
     if (event?.kind === "text" && event.text) {
-      streamedText += event.text;
+      streamedText = appendStreamText(streamedText, event.text);
       options.onStreamEvent?.(event);
     }
   }

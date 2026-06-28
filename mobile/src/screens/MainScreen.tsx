@@ -16,8 +16,9 @@ import FilesScreen from "./FilesScreen";
 import HomeScreen from "./HomeScreen";
 import ProjectsScreen from "./ProjectsScreen";
 import AgentScreen from "./AgentScreen";
+import TerminalScreen from "./TerminalScreen";
 
-type Tab = "open" | "agent" | "code" | "files";
+type Tab = "open" | "agent" | "terminal" | "code" | "files";
 
 export default function MainScreen() {
   const [activeTab, setActiveTab] = useState<Tab>("open");
@@ -38,7 +39,6 @@ export default function MainScreen() {
       >
         <View style={styles.header}>
           <Text style={styles.title}>PapaT</Text>
-          <Text style={styles.subtitle}>Phone-as-PC Terminal</Text>
         </View>
 
         <ConnectionBar
@@ -47,11 +47,17 @@ export default function MainScreen() {
           connectionStatus={connection.connectionStatus}
           serverInfo={connection.serverInfo}
           vscodeConnected={connection.vscodeConnected}
+          deviceName={connection.deviceName}
+          isPaired={connection.isPaired}
           error={connection.error}
           onHostChange={connection.setHost}
           onPortChange={connection.setPort}
           onConnect={connection.handleConnect}
           onDisconnect={connection.handleDisconnect}
+          onPairFromQr={connection.handlePairFromQr}
+          onPairWithCode={connection.handlePairWithCode}
+          onForgetDevice={connection.handleForgetDevice}
+          onError={connection.setError}
         />
 
         <ScrollView
@@ -64,6 +70,7 @@ export default function MainScreen() {
             [
               ["open", "Open"],
               ["agent", "Agent"],
+              ["terminal", "Terminal"],
               ["code", "Code"],
               ["files", "Files"],
             ] as const
@@ -86,7 +93,7 @@ export default function MainScreen() {
         </ScrollView>
 
         <View style={styles.content}>
-          {activeTab === "open" ? (
+          <View style={activeTab === "open" ? styles.panel : styles.panelHidden}>
             <ProjectsScreen
               isConnected={connection.isConnected}
               vscodeConnected={connection.vscodeConnected}
@@ -94,17 +101,26 @@ export default function MainScreen() {
               onWorkspaceChange={handleWorkspaceChange}
               onError={connection.setError}
             />
-          ) : activeTab === "agent" ? (
+          </View>
+          <View style={activeTab === "agent" ? styles.panel : styles.panelHidden}>
             <AgentScreen
               isConnected={connection.isConnected}
               onError={connection.setError}
             />
-          ) : activeTab === "code" ? (
+          </View>
+          <View style={activeTab === "terminal" ? styles.panel : styles.panelHidden}>
+            <TerminalScreen
+              isConnected={connection.isConnected}
+              onError={connection.setError}
+            />
+          </View>
+          <View style={activeTab === "code" ? styles.panel : styles.panelHidden}>
             <HomeScreen
               isConnected={connection.isConnected}
               onError={connection.setError}
             />
-          ) : (
+          </View>
+          <View style={activeTab === "files" ? styles.panel : styles.panelHidden}>
             <FilesScreen
               key={connection.workspacePath ?? "default"}
               isConnected={connection.isConnected}
@@ -113,7 +129,7 @@ export default function MainScreen() {
               workspacePath={connection.workspacePath}
               onError={connection.setError}
             />
-          )}
+          </View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -137,11 +153,6 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "700",
     color: "#f0f6fc",
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "#8b949e",
-    marginTop: 2,
   },
   tabScroll: {
     maxHeight: 48,
@@ -175,5 +186,11 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  panel: {
+    flex: 1,
+  },
+  panelHidden: {
+    display: "none",
   },
 });

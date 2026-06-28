@@ -5,6 +5,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -78,13 +79,17 @@ function MessageBubble({ item }: { item: AgentUiMessage }) {
 
 export default function AgentScreen({ isConnected, onError }: Props) {
   const listRef = useRef<FlatList>(null);
-  const chat = useAgentChat(isConnected);
+  const chat = useAgentChat(isConnected, onError);
 
   const handleSend = () => {
     onError(null);
     chat.sendMessage();
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
   };
+
+  const hasCurrentSession =
+    chat.sessions.some((session) => session.sessionId === chat.activeSessionId) ||
+    chat.messages.length > 0;
 
   return (
     <KeyboardAvoidingView
@@ -94,29 +99,70 @@ export default function AgentScreen({ isConnected, onError }: Props) {
     >
       <View style={styles.toolbar}>
         <Text style={styles.title}>AI Agent</Text>
-        <Pressable
-          style={[styles.clearBtn, !isConnected && styles.btnDisabled]}
-          onPress={chat.clearChat}
-          disabled={!isConnected}
-        >
-          <Text style={styles.clearBtnText}>Clear</Text>
-        </Pressable>
+        <View style={styles.toolbarActions}>
+          <Pressable
+            style={[styles.actionBtn, chat.isRunning && styles.btnDisabled]}
+            onPress={chat.newChat}
+            disabled={chat.isRunning}
+          >
+            <Text style={styles.actionBtnText}>New</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.clearBtn, (!isConnected || chat.isRunning) && styles.btnDisabled]}
+            onPress={chat.clearChat}
+            disabled={!isConnected || chat.isRunning}
+          >
+            <Text style={styles.clearBtnText}>Clear</Text>
+          </Pressable>
+        </View>
       </View>
+
+      {chat.sessions.length > 0 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.sessionScroll}
+          contentContainerStyle={styles.sessionList}
+        >
+          {chat.sessions.map((session) => {
+            const active = session.sessionId === chat.activeSessionId;
+            return (
+              <Pressable
+                key={session.sessionId}
+                style={[styles.sessionChip, active && styles.sessionChipActive]}
+                onPress={() => chat.selectSession(session.sessionId)}
+                disabled={chat.isRunning}
+              >
+                <Text
+                  style={[styles.sessionChipText, active && styles.sessionChipTextActive]}
+                  numberOfLines={1}
+                >
+                  {session.title}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      ) : null}
 
       {!isConnected ? (
         <Text style={styles.hint}>Connect to your PC to use the agent.</Text>
+      ) : chat.isRunning ? (
+        <Text style={styles.hint}>Agent is thinking on your PC… (can take up to a minute)</Text>
       ) : null}
 
       <FlatList
         ref={listRef}
         data={chat.messages}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item, index) => `${item.kind}-${item.id}-${index}`}
         style={styles.list}
         contentContainerStyle={styles.listContent}
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
         ListEmptyComponent={
           <Text style={styles.empty}>
-            Uses your logged-in Cursor agent on your PC. Ask it to create files, fix bugs, or run commands.
+            {hasCurrentSession
+              ? "This chat is empty. Send a message to continue."
+              : "Uses your logged-in Cursor agent on your PC. Ask it to create files, fix bugs, or run commands."}
           </Text>
         }
         renderItem={({ item }) => <MessageBubble item={item} />}
@@ -163,10 +209,27 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 8,
   },
+  toolbarActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
   title: {
     color: "#c9d1d9",
     fontWeight: "600",
     fontSize: 14,
+  },
+  actionBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: "#1f6feb",
+    borderWidth: 1,
+    borderColor: "#388bfd",
+  },
+  actionBtnText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
   },
   clearBtn: {
     paddingHorizontal: 10,
@@ -180,6 +243,35 @@ const styles = StyleSheet.create({
     color: "#c9d1d9",
     fontSize: 12,
     fontWeight: "600",
+  },
+  sessionScroll: {
+    maxHeight: 44,
+    marginBottom: 8,
+  },
+  sessionList: {
+    gap: 8,
+    paddingRight: 8,
+  },
+  sessionChip: {
+    maxWidth: 180,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "#161b22",
+    borderWidth: 1,
+    borderColor: "#30363d",
+  },
+  sessionChipActive: {
+    backgroundColor: "#1f6feb",
+    borderColor: "#388bfd",
+  },
+  sessionChipText: {
+    color: "#8b949e",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  sessionChipTextActive: {
+    color: "#fff",
   },
   hint: {
     color: "#8b949e",

@@ -35,8 +35,7 @@ export class PapaTConnection {
 
     socket.on("open", () => {
       this.connected = true;
-      this.updateStatus("connected", `PapaT: connected (${host}:${port})`);
-      this.register();
+      this.updateStatus("connecting", `PapaT: connecting (${host}:${port})`);
     });
 
     socket.on("message", (data) => {
@@ -45,13 +44,20 @@ export class PapaTConnection {
         return;
       }
 
-      if (message.type === "vscode_command") {
-        this.onCommand(message);
+      if (message.type === "auth_required") {
+        this.register();
+        this.updateStatus("connected", `PapaT: connected (${host}:${port})`);
         return;
       }
 
       if (message.type === "connected") {
         this.register();
+        this.updateStatus("connected", `PapaT: connected (${host}:${port})`);
+        return;
+      }
+
+      if (message.type === "vscode_command") {
+        this.onCommand(message);
       }
     });
 

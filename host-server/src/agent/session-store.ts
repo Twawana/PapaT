@@ -1,5 +1,5 @@
 import { ChildProcess } from "child_process";
-import { AgentChatMessage } from "../protocol";
+import { AgentChatMessage, AgentSessionSummary } from "../protocol";
 
 interface SessionState {
   messages: AgentChatMessage[];
@@ -76,6 +76,29 @@ export function setSessionRunning(
 
 export function isSessionRunning(sessionId: string): boolean {
   return sessions.get(sessionId)?.running ?? false;
+}
+
+export function listSessions(): AgentSessionSummary[] {
+  const summaries: AgentSessionSummary[] = [];
+
+  for (const [sessionId, session] of sessions) {
+    const visible = session.messages.filter((m) => m.role !== "system");
+    if (visible.length === 0) {
+      continue;
+    }
+
+    const firstUser = visible.find((m) => m.role === "user");
+    const lastMessage = visible[visible.length - 1];
+
+    summaries.push({
+      sessionId,
+      title: (firstUser?.content.trim() || "Chat").slice(0, 60),
+      updatedAt: lastMessage.timestamp ?? Date.now(),
+      messageCount: visible.length,
+    });
+  }
+
+  return summaries.sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 export function cancelSession(sessionId: string): boolean {

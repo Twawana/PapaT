@@ -8,6 +8,12 @@ export type ServerMessage =
       hostname: string;
       workspace: string;
     }
+  | {
+      type: "auth_required";
+      serverId: string;
+      version: string;
+      hostname: string;
+    }
   | { type: "pong" }
   | { type: "error"; message: string }
   | {

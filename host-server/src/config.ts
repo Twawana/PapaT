@@ -12,4 +12,8 @@ export const config = {
   cursorApiKey: process.env.CURSOR_API_KEY || "",
   cursorModel: process.env.PAPAT_CURSOR_MODEL || "auto",
   agentMaxTurns: Number(process.env.PAPAT_AGENT_MAX_TURNS) || 15,
+  /** Max time for a single Cursor agent run (npm start, etc. can be slow). */
+  agentTimeoutMs: Number(process.env.PAPAT_AGENT_TIMEOUT) || 600_000,
+  requireAuth: process.env.PAPAT_REQUIRE_AUTH !== "false",
+  pairingTtlMs: Number(process.env.PAPAT_PAIRING_TTL_MS) || 120_000,
 };

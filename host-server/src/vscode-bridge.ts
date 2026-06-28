@@ -101,12 +101,10 @@ function broadcastVscodeStatus(): void {
   });
 }
 
-export function toAbsoluteWorkspacePath(relativePath: string): string {
-  const root = getWorkspaceRoot();
-  if (!relativePath || relativePath === ".") {
-    return root;
-  }
-  return path.resolve(root, relativePath);
+import { resolveFsPath } from "./path-utils";
+
+export function toAbsoluteWorkspacePath(clientPath: string): string {
+  return resolveFsPath(clientPath);
 }
 
 export function sendVscodeCommand(

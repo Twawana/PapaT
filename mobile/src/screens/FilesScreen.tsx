@@ -13,7 +13,14 @@ import {
   View,
 } from "react-native";
 import { papatClient } from "../services/websocket";
-import { FileEntry } from "../types/protocol";
+import { BrowseEntry, BrowseRoot, FileEntry } from "../types/protocol";
+import {
+  dirname,
+  isAbsolutePcPath,
+  joinPath,
+  parentPath,
+  pathLabel,
+} from "../utils/paths";
 
 interface Props {
   isConnected: boolean;
@@ -29,16 +36,39 @@ function formatSize(bytes?: number): string {
   return `${(bytes / 1024).toFixed(1)} KB`;
 }
 
-function joinPath(dir: string, name: string): string {
-  if (dir === "." || dir === "") return name;
-  return `${dir}/${name}`.replace(/\/+/g, "/");
+function driveRoot(path: string): string {
+  const normalized = path.replace(/\\/g, "/");
+  const match = normalized.match(/^([A-Za-z]:)/);
+  return match ? `${match[1]}/` : path;
 }
 
-function parentPath(current: string): string {
-  if (current === "." || current === "") return ".";
-  const parts = current.split("/").filter(Boolean);
-  parts.pop();
-  return parts.length === 0 ? "." : parts.join("/");
+function breadcrumbSegments(current: string): { label: string; path: string }[] {
+  if (!isAbsolutePcPath(current)) {
+    if (current === ".") return [];
+    return current
+      .split("/")
+      .filter(Boolean)
+      .map((part, index, parts) => ({
+        label: part,
+        path: parts.slice(0, index + 1).join("/"),
+      }));
+  }
+
+  const normalized = current.replace(/\\/g, "/").replace(/\/+$/, "");
+  const parts = normalized.split("/").filter(Boolean);
+  if (parts.length === 0) return [];
+
+  const root = `${parts[0]}/`;
+  const segments: { label: string; path: string }[] = [{ label: parts[0], path: root }];
+
+  for (let i = 1; i < parts.length; i++) {
+    segments.push({
+      label: parts[i],
+      path: `${parts.slice(0, i + 1).join("/")}`,
+    });
+  }
+
+  return segments;
 }
 
 export default function FilesScreen({
@@ -61,8 +91,23 @@ export default function FilesScreen({
   const [openingVscode, setOpeningVscode] = useState(false);
 
   const [promptVisible, setPromptVisible] = useState(false);
-  const [promptKind, setPromptKind] = useState<"file" | "folder">("file");
+  const [promptKind, setPromptKind] = useState<"file" | "folder" | "rename">("file");
   const [promptName, setPromptName] = useState("");
+  const [renameTarget, setRenameTarget] = useState<FileEntry | null>(null);
+
+  const [browseVisible, setBrowseVisible] = useState(false);
+  const [browsePath, setBrowsePath] = useState<string | null>(null);
+  const [browseEntries, setBrowseEntries] = useState<BrowseEntry[]>([]);
+  const [browseRoots, setBrowseRoots] = useState<BrowseRoot[]>([]);
+  const [browseLoading, setBrowseLoading] = useState(false);
+
+  const [moveTarget, setMoveTarget] = useState<FileEntry | null>(null);
+  const [moveDestPath, setMoveDestPath] = useState<string | null>(null);
+  const [moveDestEntries, setMoveDestEntries] = useState<BrowseEntry[]>([]);
+  const [moveDestRoots, setMoveDestRoots] = useState<BrowseRoot[]>([]);
+  const [moveDestLoading, setMoveDestLoading] = useState(false);
+
+  const inPcFolder = isAbsolutePcPath(currentPath);
 
   const loadDirectory = useCallback(
     async (path: string, isRefresh = false) => {
@@ -81,6 +126,7 @@ export default function FilesScreen({
         const result = await papatClient.listDir(path);
         setCurrentPath(result.path || ".");
         setEntries(result.entries);
+        onError(null);
       } catch (err) {
         onError(err instanceof Error ? err.message : "Failed to list files");
       } finally {
@@ -149,6 +195,15 @@ export default function FilesScreen({
     }
   };
 
+  const deleteEntry = async (entry: FileEntry) => {
+    try {
+      await papatClient.deletePath(entry.path);
+      await loadDirectory(currentPath, true);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Failed to delete");
+    }
+  };
+
   const confirmDelete = (entry: FileEntry) => {
     Alert.alert(
       "Delete",
@@ -158,33 +213,64 @@ export default function FilesScreen({
         {
           text: "Delete",
           style: "destructive",
-          onPress: async () => {
-            try {
-              await papatClient.deletePath(entry.path);
-              await loadDirectory(currentPath, true);
-            } catch (err) {
-              onError(
-                err instanceof Error ? err.message : "Failed to delete"
-              );
-            }
-          },
+          onPress: () => void deleteEntry(entry),
         },
       ]
     );
   };
 
+  const showEntryActions = (entry: FileEntry) => {
+    Alert.alert(entry.name, undefined, [
+      {
+        text: "Rename",
+        onPress: () => {
+          setRenameTarget(entry);
+          setPromptKind("rename");
+          setPromptName(entry.name);
+          setPromptVisible(true);
+        },
+      },
+      {
+        text: "Move",
+        onPress: () => void startMove(entry),
+      },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => confirmDelete(entry),
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+
   const promptNewItem = (kind: "file" | "folder") => {
     setPromptKind(kind);
     setPromptName("");
+    setRenameTarget(null);
     setPromptVisible(true);
   };
 
-  const submitNewItem = async () => {
+  const submitPrompt = async () => {
     const name = promptName.trim();
     if (!name) return;
 
     setPromptVisible(false);
-    const newPath = joinPath(currentPath === "." ? "" : currentPath, name);
+
+    if (promptKind === "rename" && renameTarget) {
+      const dest = joinPath(dirname(renameTarget.path), name);
+      try {
+        await papatClient.movePath(renameTarget.path, dest);
+        await loadDirectory(currentPath, true);
+      } catch (err) {
+        onError(err instanceof Error ? err.message : "Failed to rename");
+      } finally {
+        setRenameTarget(null);
+      }
+      return;
+    }
+
+    const base = currentPath === "." ? "." : currentPath;
+    const newPath = joinPath(base, name);
 
     try {
       if (promptKind === "file") {
@@ -200,25 +286,169 @@ export default function FilesScreen({
     }
   };
 
-  const pathParts =
-    currentPath === "."
-      ? []
-      : currentPath.split("/").filter(Boolean);
+  const startBrowse = async () => {
+    if (!isConnected) {
+      onError("Connect to your PC first");
+      return;
+    }
+
+    setBrowseVisible(true);
+    setBrowseLoading(true);
+
+    try {
+      const roots = await papatClient.getBrowseRoots();
+      setBrowseRoots(roots.roots);
+      const first = roots.roots[0]?.path;
+      if (first) {
+        const listing = await papatClient.browseList(first);
+        setBrowsePath(listing.path);
+        setBrowseEntries(listing.entries);
+      }
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Failed to browse folders");
+      setBrowseVisible(false);
+    } finally {
+      setBrowseLoading(false);
+    }
+  };
+
+  const enterBrowseFolder = async (path: string) => {
+    setBrowseLoading(true);
+    try {
+      const listing = await papatClient.browseList(path);
+      setBrowsePath(listing.path);
+      setBrowseEntries(listing.entries);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Failed to open folder");
+    } finally {
+      setBrowseLoading(false);
+    }
+  };
+
+  const browseParent = () => {
+    if (!browsePath) return;
+    if (isAbsolutePcPath(browsePath)) {
+      const parent = parentPath(browsePath.replace(/\\/g, "/"));
+      if (parent !== browsePath) {
+        void enterBrowseFolder(parent);
+      }
+      return;
+    }
+    const parts = browsePath.replace(/\\/g, "/").split("/").filter(Boolean);
+    if (parts.length <= 1) return;
+    parts.pop();
+    void enterBrowseFolder(`/${parts.join("/")}`);
+  };
+
+  const openBrowsedFolder = () => {
+    if (!browsePath) return;
+    setBrowseVisible(false);
+    setCurrentPath(browsePath.replace(/\\/g, "/"));
+  };
+
+  const startMove = async (entry: FileEntry) => {
+    setMoveTarget(entry);
+    setMoveDestLoading(true);
+
+    try {
+      const roots = await papatClient.getBrowseRoots();
+      setMoveDestRoots(roots.roots);
+      const first = roots.roots[0]?.path;
+      if (first) {
+        const listing = await papatClient.browseList(first);
+        setMoveDestPath(listing.path);
+        setMoveDestEntries(listing.entries);
+      }
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Failed to open move picker");
+      setMoveTarget(null);
+    } finally {
+      setMoveDestLoading(false);
+    }
+  };
+
+  const enterMoveDest = async (path: string) => {
+    setMoveDestLoading(true);
+    try {
+      const listing = await papatClient.browseList(path);
+      setMoveDestPath(listing.path);
+      setMoveDestEntries(listing.entries);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Failed to open folder");
+    } finally {
+      setMoveDestLoading(false);
+    }
+  };
+
+  const moveDestParent = () => {
+    if (!moveDestPath) return;
+    const parent = parentPath(moveDestPath.replace(/\\/g, "/"));
+    if (parent !== moveDestPath) {
+      void enterMoveDest(parent);
+    }
+  };
+
+  const confirmMove = async () => {
+    if (!moveTarget || !moveDestPath) return;
+
+    const dest = joinPath(moveDestPath.replace(/\\/g, "/"), moveTarget.name);
+    try {
+      await papatClient.movePath(moveTarget.path, dest);
+      setMoveTarget(null);
+      setMoveDestPath(null);
+      await loadDirectory(currentPath, true);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Failed to move");
+    }
+  };
+
+  const cancelMove = () => {
+    setMoveTarget(null);
+    setMoveDestPath(null);
+  };
+
+  const crumbs = breadcrumbSegments(currentPath);
+  const canGoUp =
+    inPcFolder
+      ? currentPath.replace(/\\/g, "/").replace(/\/+$/, "") !== driveRoot(currentPath)
+      : currentPath !== ".";
+
+  const locationTitle = inPcFolder
+    ? "PC folder"
+    : workspaceName
+      ? workspaceName
+      : "Workspace";
+
+  const promptTitle =
+    promptKind === "rename"
+      ? "Rename"
+      : promptKind === "file"
+        ? "New File"
+        : "New Folder";
 
   return (
     <View style={styles.container}>
       <View style={styles.toolbar}>
-        <View>
-          <Text style={styles.sectionTitle}>
-            {workspaceName ? workspaceName : "PC Workspace"}
-          </Text>
-          {workspacePath ? (
+        <View style={styles.toolbarInfo}>
+          <Text style={styles.sectionTitle}>{locationTitle}</Text>
+          {inPcFolder ? (
+            <Text style={styles.workspacePath} numberOfLines={1}>
+              {currentPath}
+            </Text>
+          ) : workspacePath ? (
             <Text style={styles.workspacePath} numberOfLines={1}>
               {workspacePath}
             </Text>
           ) : null}
         </View>
         <View style={styles.toolbarActions}>
+          <Pressable
+            style={[styles.toolBtn, !isConnected && styles.btnDisabled]}
+            onPress={startBrowse}
+            disabled={!isConnected}
+          >
+            <Text style={styles.toolBtnText}>Browse PC</Text>
+          </Pressable>
           <Pressable
             style={[styles.toolBtn, !isConnected && styles.btnDisabled]}
             onPress={() => loadDirectory(currentPath, true)}
@@ -244,21 +474,58 @@ export default function FilesScreen({
       </View>
 
       <View style={styles.breadcrumb}>
-        <Pressable onPress={() => setCurrentPath(".")}>
-          <Text style={styles.crumb}>workspace</Text>
-        </Pressable>
-        {pathParts.map((part, index) => {
-          const path = pathParts.slice(0, index + 1).join("/");
-          return (
-            <React.Fragment key={path}>
+        {inPcFolder ? (
+          <Pressable onPress={() => setCurrentPath(".")}>
+            <Text style={styles.crumbMuted}>workspace</Text>
+          </Pressable>
+        ) : (
+          <Pressable onPress={() => setCurrentPath(".")}>
+            <Text style={[styles.crumb, crumbs.length === 0 && styles.crumbActive]}>
+              workspace
+            </Text>
+          </Pressable>
+        )}
+        {inPcFolder ? (
+          <>
+            <Text style={styles.crumbSep}> · </Text>
+            {crumbs.map((crumb, index) => (
+              <React.Fragment key={crumb.path}>
+                {index > 0 ? <Text style={styles.crumbSep}>/</Text> : null}
+                <Pressable onPress={() => setCurrentPath(crumb.path)}>
+                  <Text
+                    style={[
+                      styles.crumb,
+                      index === crumbs.length - 1 && styles.crumbActive,
+                    ]}
+                  >
+                    {crumb.label}
+                  </Text>
+                </Pressable>
+              </React.Fragment>
+            ))}
+          </>
+        ) : (
+          crumbs.map((crumb) => (
+            <React.Fragment key={crumb.path}>
               <Text style={styles.crumbSep}>/</Text>
-              <Pressable onPress={() => setCurrentPath(path)}>
-                <Text style={styles.crumb}>{part}</Text>
+              <Pressable onPress={() => setCurrentPath(crumb.path)}>
+                <Text
+                  style={[
+                    styles.crumb,
+                    crumb.path === currentPath && styles.crumbActive,
+                  ]}
+                >
+                  {crumb.label}
+                </Text>
               </Pressable>
             </React.Fragment>
-          );
-        })}
+          ))
+        )}
       </View>
+
+      <Text style={styles.hint}>
+        Tap to open · Long-press for rename, move, or delete
+      </Text>
 
       {loading && !refreshing ? (
         <ActivityIndicator color="#58a6ff" style={styles.loader} />
@@ -275,14 +542,16 @@ export default function FilesScreen({
           }
           ListEmptyComponent={
             <Text style={styles.empty}>
-              {isConnected ? "No files in this folder" : "Connect to browse files"}
+              {isConnected
+                ? `No files in ${pathLabel(currentPath)}`
+                : "Connect to browse files"}
             </Text>
           }
           renderItem={({ item }) => (
             <Pressable
               style={styles.row}
               onPress={() => openFile(item)}
-              onLongPress={() => confirmDelete(item)}
+              onLongPress={() => showEntryActions(item)}
             >
               <Text style={styles.rowIcon}>
                 {item.entryType === "directory" ? "📁" : "📄"}
@@ -298,7 +567,7 @@ export default function FilesScreen({
         />
       )}
 
-      {currentPath !== "." ? (
+      {canGoUp ? (
         <Pressable
           style={styles.backBtn}
           onPress={() => setCurrentPath(parentPath(currentPath))}
@@ -365,9 +634,7 @@ export default function FilesScreen({
       <Modal visible={promptVisible} transparent animationType="fade">
         <View style={styles.promptOverlay}>
           <View style={styles.promptCard}>
-            <Text style={styles.promptTitle}>
-              {promptKind === "file" ? "New File" : "New Folder"}
-            </Text>
+            <Text style={styles.promptTitle}>{promptTitle}</Text>
             <TextInput
               style={styles.promptInput}
               value={promptName}
@@ -381,17 +648,138 @@ export default function FilesScreen({
             <View style={styles.promptActions}>
               <Pressable
                 style={styles.promptBtn}
-                onPress={() => setPromptVisible(false)}
+                onPress={() => {
+                  setPromptVisible(false);
+                  setRenameTarget(null);
+                }}
               >
                 <Text style={styles.promptBtnText}>Cancel</Text>
               </Pressable>
               <Pressable
                 style={[styles.promptBtn, styles.promptBtnPrimary]}
-                onPress={submitNewItem}
+                onPress={() => void submitPrompt()}
               >
-                <Text style={styles.promptBtnPrimaryText}>Create</Text>
+                <Text style={styles.promptBtnPrimaryText}>
+                  {promptKind === "rename" ? "Rename" : "Create"}
+                </Text>
               </Pressable>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={browseVisible} animationType="slide">
+        <View style={styles.browseModal}>
+          <View style={styles.browseHeader}>
+            <Text style={styles.browseTitle}>Browse PC</Text>
+            <Pressable onPress={() => setBrowseVisible(false)}>
+              <Text style={styles.browseClose}>Close</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.rootRow}>
+            {browseRoots.map((root) => (
+              <Pressable
+                key={root.path}
+                style={styles.rootChip}
+                onPress={() => void enterBrowseFolder(root.path)}
+              >
+                <Text style={styles.rootChipText}>{root.name}</Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Text style={styles.browsePath} numberOfLines={2}>
+            {browsePath ?? ""}
+          </Text>
+
+          {browseLoading ? (
+            <ActivityIndicator color="#58a6ff" style={styles.loader} />
+          ) : (
+            <FlatList
+              data={browseEntries}
+              keyExtractor={(item) => item.path}
+              renderItem={({ item }) => (
+                <Pressable
+                  style={styles.browseRow}
+                  onPress={() => void enterBrowseFolder(item.path)}
+                >
+                  <Text style={styles.browseRowIcon}>📁</Text>
+                  <Text style={styles.browseRowName}>{item.name}</Text>
+                </Pressable>
+              )}
+            />
+          )}
+
+          <View style={styles.browseFooter}>
+            <Pressable style={styles.browseFooterBtn} onPress={browseParent}>
+              <Text style={styles.browseFooterText}>Up</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.browseFooterBtn, styles.browseSelectBtn]}
+              onPress={openBrowsedFolder}
+            >
+              <Text style={styles.browseSelectText}>Open here</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={!!moveTarget} animationType="slide">
+        <View style={styles.browseModal}>
+          <View style={styles.browseHeader}>
+            <Text style={styles.browseTitle}>
+              Move {moveTarget?.name ?? ""}
+            </Text>
+            <Pressable onPress={cancelMove}>
+              <Text style={styles.browseClose}>Cancel</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.rootRow}>
+            {moveDestRoots.map((root) => (
+              <Pressable
+                key={root.path}
+                style={styles.rootChip}
+                onPress={() => void enterMoveDest(root.path)}
+              >
+                <Text style={styles.rootChipText}>{root.name}</Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Text style={styles.browsePath} numberOfLines={2}>
+            {moveDestPath ?? ""}
+          </Text>
+
+          {moveDestLoading ? (
+            <ActivityIndicator color="#58a6ff" style={styles.loader} />
+          ) : (
+            <FlatList
+              data={moveDestEntries}
+              keyExtractor={(item) => item.path}
+              renderItem={({ item }) => (
+                <Pressable
+                  style={styles.browseRow}
+                  onPress={() => void enterMoveDest(item.path)}
+                >
+                  <Text style={styles.browseRowIcon}>📁</Text>
+                  <Text style={styles.browseRowName}>{item.name}</Text>
+                </Pressable>
+              )}
+            />
+          )}
+
+          <View style={styles.browseFooter}>
+            <Pressable style={styles.browseFooterBtn} onPress={moveDestParent}>
+              <Text style={styles.browseFooterText}>Up</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.browseFooterBtn, styles.browseSelectBtn]}
+              onPress={() => void confirmMove()}
+            >
+              <Text style={styles.browseSelectText}>Move here</Text>
+            </Pressable>
           </View>
         </View>
       </Modal>
@@ -404,9 +792,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   toolbar: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    marginBottom: 8,
+  },
+  toolbarInfo: {
     marginBottom: 8,
   },
   sectionTitle: {
@@ -418,10 +806,10 @@ const styles = StyleSheet.create({
     color: "#6e7681",
     fontSize: 11,
     marginTop: 2,
-    maxWidth: 180,
   },
   toolbarActions: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
   },
   toolBtn: {
@@ -441,15 +829,28 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 4,
   },
   crumb: {
     color: "#58a6ff",
     fontSize: 13,
   },
+  crumbActive: {
+    color: "#f0f6fc",
+    fontWeight: "600",
+  },
+  crumbMuted: {
+    color: "#6e7681",
+    fontSize: 13,
+  },
   crumbSep: {
     color: "#484f58",
     fontSize: 13,
+  },
+  hint: {
+    color: "#6e7681",
+    fontSize: 11,
+    marginBottom: 8,
   },
   loader: {
     marginTop: 24,
@@ -510,6 +911,7 @@ const styles = StyleSheet.create({
   },
   editorActions: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
   },
   editorBtn: {
@@ -596,6 +998,95 @@ const styles = StyleSheet.create({
     backgroundColor: "#238636",
   },
   promptBtnPrimaryText: {
+    color: "#fff",
+    fontWeight: "700",
+  },
+  browseModal: {
+    flex: 1,
+    backgroundColor: "#010409",
+    paddingTop: Platform.OS === "ios" ? 48 : 24,
+    paddingHorizontal: 16,
+  },
+  browseHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  browseTitle: {
+    color: "#f0f6fc",
+    fontSize: 18,
+    fontWeight: "700",
+    flex: 1,
+    marginRight: 8,
+  },
+  browseClose: {
+    color: "#58a6ff",
+    fontWeight: "600",
+  },
+  rootRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 12,
+  },
+  rootChip: {
+    backgroundColor: "#21262d",
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: "#30363d",
+  },
+  rootChipText: {
+    color: "#c9d1d9",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  browsePath: {
+    color: "#8b949e",
+    fontSize: 12,
+    marginBottom: 8,
+  },
+  browseRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#21262d",
+  },
+  browseRowIcon: {
+    fontSize: 16,
+    marginRight: 10,
+  },
+  browseRowName: {
+    color: "#f0f6fc",
+    fontSize: 15,
+  },
+  browseFooter: {
+    flexDirection: "row",
+    gap: 8,
+    paddingVertical: 12,
+  },
+  browseFooterBtn: {
+    flex: 1,
+    backgroundColor: "#21262d",
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#30363d",
+  },
+  browseFooterText: {
+    color: "#c9d1d9",
+    fontWeight: "600",
+  },
+  browseSelectBtn: {
+    backgroundColor: "#238636",
+    borderColor: "#238636",
+    flex: 2,
+  },
+  browseSelectText: {
     color: "#fff",
     fontWeight: "700",
   },

@@ -1,6 +1,8 @@
 import { createServer } from "./server";
 import { config } from "./config";
 import { checkCursorAuth, isAgentInstalled } from "./agent/cursor-cli";
+import { isAuthRequired } from "./auth";
+import { printPairingQr, startPairingRefreshTimer } from "./pairing-display";
 
 const wss = createServer();
 
@@ -20,8 +22,16 @@ process.on("unhandledRejection", (reason) => {
   console.error("[PapaT Host] Unhandled rejection:", reason);
 });
 
-console.log(`[PapaT Host] PapaT v0.5.0 — port ${config.port}`);
+console.log(`[PapaT Host] PapaT v0.6.0 — port ${config.port}`);
 console.log(`[PapaT Host] Agent provider: ${config.llmProvider}`);
+console.log(
+  `[PapaT Host] Auth: ${isAuthRequired() ? "required (QR pairing)" : "disabled"}`
+);
+
+if (isAuthRequired()) {
+  void printPairingQr();
+  startPairingRefreshTimer();
+}
 
 if (config.llmProvider === "cursor") {
   if (!isAgentInstalled()) {

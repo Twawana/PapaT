@@ -65,20 +65,25 @@ class PapaTConnection {
         this.socket = socket;
         socket.on("open", () => {
             this.connected = true;
-            this.updateStatus("connected", `PapaT: connected (${host}:${port})`);
-            this.register();
+            this.updateStatus("connecting", `PapaT: connecting (${host}:${port})`);
         });
         socket.on("message", (data) => {
             const message = (0, protocol_1.parseServerMessage)(data.toString("utf-8"));
             if (!message) {
                 return;
             }
-            if (message.type === "vscode_command") {
-                this.onCommand(message);
+            if (message.type === "auth_required") {
+                this.register();
+                this.updateStatus("connected", `PapaT: connected (${host}:${port})`);
                 return;
             }
             if (message.type === "connected") {
                 this.register();
+                this.updateStatus("connected", `PapaT: connected (${host}:${port})`);
+                return;
+            }
+            if (message.type === "vscode_command") {
+                this.onCommand(message);
             }
         });
         socket.on("close", () => {

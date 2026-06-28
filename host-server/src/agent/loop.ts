@@ -1,7 +1,8 @@
-import { AgentChatMessage, ServerMessage } from "../protocol";
+import { AgentChatMessage, AgentSessionSummary, ServerMessage } from "../protocol";
 import { config } from "../config";
 import { getWorkspaceRoot } from "../workspace-state";
 import {
+  appendStreamText,
   checkCursorAuth,
   createCursorChat,
   runCursorAgent,
@@ -12,6 +13,7 @@ import {
   getCursorChatId,
   getSession,
   getSessionHistory,
+  listSessions,
   setCursorChatId,
   setSessionChild,
   setSessionRunning,
@@ -125,7 +127,7 @@ async function runCursorAgentTurn(
       registerChild: (child) => setSessionChild(sessionId, child),
       onStreamEvent: (event) => {
         if (event.kind === "text" && event.text) {
-          fullText += event.text;
+          fullText = appendStreamText(fullText, event.text);
           emit({ type: "agent_delta", sessionId, content: fullText });
           return;
         }
@@ -166,8 +168,12 @@ async function runCursorAgentTurn(
     }
 
     emit({ type: "agent_done", id: requestId, sessionId });
+    console.log(
+      `[PapaT Host] Agent done (${sessionId.slice(0, 8)}): ${finalContent.slice(0, 120)}`
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Agent failed";
+    console.error(`[PapaT Host] Agent error (${sessionId.slice(0, 8)}): ${message}`);
     emit({ type: "agent_error", id: requestId, sessionId, message });
   } finally {
     setSessionChild(sessionId, null);
@@ -291,6 +297,10 @@ async function runOpenAiAgentTurn(
 
 export function getAgentHistory(sessionId: string): AgentChatMessage[] {
   return toUiMessages(sessionId, getSessionHistory(sessionId));
+}
+
+export function listAgentSessions(): AgentSessionSummary[] {
+  return listSessions();
 }
 
 export function cancelAgent(sessionId: string): boolean {
