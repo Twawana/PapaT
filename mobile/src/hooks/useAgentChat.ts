@@ -13,6 +13,12 @@ import {
   upsertSession,
 } from "../services/chatSessions";
 import {
+  MAX_ATTACHMENTS,
+  PendingAgentAttachment,
+  showAttachmentPicker,
+  toWirePayload,
+} from "../services/agentAttachments";
+import {
   AgentChatMessage,
   AgentSessionSummary,
   AgentUiMessage,
@@ -35,6 +41,7 @@ function historyToUi(messages: AgentChatMessage[]): AgentUiMessage[] {
         id: `hist-user-${i}`,
         kind: "user",
         content: message.content,
+        attachments: message.attachments,
       });
     } else if (message.role === "assistant") {
       if (message.toolCalls?.length) {
@@ -94,6 +101,7 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
   const [activeSessionId, setActiveSessionId] = useState(sessionIdRef.current);
   const [messages, setMessages] = useState<AgentUiMessage[]>([]);
   const [input, setInput] = useState("");
+  const [attachments, setAttachments] = useState<PendingAgentAttachment[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const assistantIdRef = useRef<string | null>(null);
   const sessionsLoadedRef = useRef(false);
@@ -322,6 +330,7 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
       sessionIdRef.current = sessionId;
       setActiveSessionId(sessionId);
       setInput("");
+      setAttachments([]);
       setIsRunning(false);
       assistantIdRef.current = null;
       await saveActiveSessionId(sessionId);
@@ -338,33 +347,73 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
     setActiveSessionId(sessionId);
     setMessages([]);
     setInput("");
+    setAttachments([]);
     assistantIdRef.current = null;
     await saveActiveSessionId(sessionId);
   }, [isRunning]);
 
+  const addAttachment = useCallback(
+    (attachment: PendingAgentAttachment) => {
+      setAttachments((prev) => {
+        if (prev.length >= MAX_ATTACHMENTS) {
+          onError?.(`You can attach up to ${MAX_ATTACHMENTS} files`);
+          return prev;
+        }
+        if (prev.some((item) => item.name === attachment.name && item.size === attachment.size)) {
+          return prev;
+        }
+        onError?.(null);
+        return [...prev, attachment];
+      });
+    },
+    [onError]
+  );
+
+  const removeAttachment = useCallback((attachmentId: string) => {
+    setAttachments((prev) => prev.filter((item) => item.id !== attachmentId));
+  }, []);
+
+  const pickAttachment = useCallback(() => {
+    showAttachmentPicker((attachment) => addAttachment(attachment));
+  }, [addAttachment]);
+
   const sendMessage = useCallback(() => {
     const text = input.trim();
-    if (!text || !isConnected || isRunning) return;
+    if ((!text && attachments.length === 0) || !isConnected || isRunning) return;
 
     const sessionId = sessionIdRef.current;
     const now = Date.now();
+    const titleSource = text || attachments[0]?.name || "Attachment";
     const summary: AgentSessionSummary = {
       sessionId,
-      title: sessionTitleFromMessage(text),
+      title: sessionTitleFromMessage(titleSource),
       updatedAt: now,
       messageCount: messages.filter((item) => item.kind === "user").length + 1,
     };
 
     void persistSessions(upsertSession(sessions, summary));
 
+    const wireAttachments = toWirePayload(attachments);
+
     setMessages((prev) => [
       ...prev,
-      { id: createUiId("user"), kind: "user", content: text },
+      {
+        id: createUiId("user"),
+        kind: "user",
+        content: text,
+        localAttachmentPreviews: attachments.map((item) => ({
+          id: item.id,
+          name: item.name,
+          mimeType: item.mimeType,
+          previewUri: item.previewUri,
+        })),
+      },
     ]);
     setInput("");
+    setAttachments([]);
 
     try {
-      titusClient.sendAgentMessage(sessionId, text);
+      titusClient.sendAgentMessage(sessionId, text, wireAttachments);
       setIsRunning(true);
     } catch (err) {
       setMessages((prev) => [
@@ -377,7 +426,7 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
       ]);
       setIsRunning(false);
     }
-  }, [input, isConnected, isRunning, messages, persistSessions, sessions]);
+  }, [attachments, input, isConnected, isRunning, messages, persistSessions, sessions]);
 
   const cancel = useCallback(() => {
     try {
@@ -407,6 +456,7 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
     setActiveSessionId(nextId);
     setMessages([]);
     setInput("");
+    setAttachments([]);
     await saveActiveSessionId(nextId);
   }, [isConnected, isRunning, persistSessions, sessions]);
 
@@ -416,6 +466,9 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
     messages,
     input,
     setInput,
+    attachments,
+    pickAttachment,
+    removeAttachment,
     isRunning,
     sendMessage,
     cancel,

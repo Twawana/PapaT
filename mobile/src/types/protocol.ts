@@ -32,9 +32,28 @@ export interface AgentToolCallInfo {
   arguments: Record<string, unknown>;
 }
 
+export interface AgentAttachmentRef {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  path: string;
+  kind: "image" | "text" | "document";
+}
+
+/** Wire payload from mobile client (base64 file data). */
+export interface AgentAttachmentPayload {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  data: string;
+}
+
 export interface AgentChatMessage {
   role: "user" | "assistant" | "tool" | "system";
   content: string;
+  attachments?: AgentAttachmentRef[];
   toolCallId?: string;
   name?: string;
   isError?: boolean;
@@ -135,7 +154,13 @@ export type ClientMessage =
       path: string;
       editor?: EditorId;
     }
-  | { type: "agent_send"; id: string; sessionId: string; message: string }
+  | {
+      type: "agent_send";
+      id: string;
+      sessionId: string;
+      message: string;
+      attachments?: AgentAttachmentPayload[];
+    }
   | { type: "agent_cancel"; sessionId: string }
   | { type: "agent_history"; id: string; sessionId: string }
   | { type: "agent_clear"; id: string; sessionId: string }
@@ -317,7 +342,13 @@ export interface ExecutionState {
 }
 
 export type AgentUiMessage =
-  | { id: string; kind: "user"; content: string }
+  | {
+      id: string;
+      kind: "user";
+      content: string;
+      attachments?: AgentAttachmentRef[];
+      localAttachmentPreviews?: Array<{ id: string; name: string; mimeType: string; previewUri?: string }>;
+    }
   | { id: string; kind: "assistant"; content: string; streaming?: boolean }
   | {
       id: string;

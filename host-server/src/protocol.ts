@@ -26,15 +26,46 @@ export interface BrowseEntry {
 
 export type EditorId = "cursor" | "vscode";
 
+export type AgentProviderId = "cursor" | "claude" | "copilot" | "augment" | "openai";
+
+export interface AgentProviderStatus {
+  id: AgentProviderId;
+  label: string;
+  description: string;
+  installed: boolean;
+  authenticated: boolean;
+  statusMessage: string;
+  isActive: boolean;
+}
+
 export interface AgentToolCallInfo {
   id: string;
   name: string;
   arguments: Record<string, unknown>;
 }
 
+export interface AgentAttachmentRef {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  path: string;
+  kind: "image" | "text" | "document";
+}
+
+/** Wire payload from mobile client (base64 file data). */
+export interface AgentAttachmentPayload {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  data: string;
+}
+
 export interface AgentChatMessage {
   role: "user" | "assistant" | "tool" | "system";
   content: string;
+  attachments?: AgentAttachmentRef[];
   toolCallId?: string;
   name?: string;
   isError?: boolean;
@@ -135,11 +166,19 @@ export type ClientMessage =
       path: string;
       editor?: EditorId;
     }
-  | { type: "agent_send"; id: string; sessionId: string; message: string }
+  | {
+      type: "agent_send";
+      id: string;
+      sessionId: string;
+      message: string;
+      attachments?: AgentAttachmentPayload[];
+    }
   | { type: "agent_cancel"; sessionId: string }
   | { type: "agent_history"; id: string; sessionId: string }
   | { type: "agent_clear"; id: string; sessionId: string }
   | { type: "agent_sessions"; id: string }
+  | { type: "agent_providers"; id: string }
+  | { type: "agent_set_provider"; id: string; providerId: AgentProviderId }
   | { type: "vscode_register"; workspaceFolders: string[]; extensionVersion?: string }
   | { type: "vscode_status"; activeFile?: string | null; workspaceFolders?: string[] }
   | { type: "vscode_get_status"; id: string }
@@ -259,6 +298,17 @@ export type ServerMessage =
       type: "agent_sessions_result";
       id: string;
       sessions: AgentSessionSummary[];
+    }
+  | {
+      type: "agent_providers_result";
+      id: string;
+      providers: AgentProviderStatus[];
+      activeProviderId: AgentProviderId;
+    }
+  | {
+      type: "agent_provider_changed";
+      activeProviderId: AgentProviderId;
+      providers: AgentProviderStatus[];
     }
   | {
       type: "agent_error";

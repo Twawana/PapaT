@@ -12,8 +12,13 @@ export interface LlmResponse {
   toolCalls: LlmToolCall[];
 }
 
-type OpenAiMessage =
-  | { role: "system" | "user"; content: string }
+export type OpenAiContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
+export type OpenAiMessage =
+  | { role: "system"; content: string }
+  | { role: "user"; content: string | OpenAiContentPart[] }
   | {
       role: "assistant";
       content: string | null;
@@ -96,5 +101,3 @@ export async function callLlm(
     toolCalls,
   };
 }
-
-export type { OpenAiMessage };

@@ -1,6 +1,7 @@
 import React, { useMemo, useRef } from "react";
 import {
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -10,6 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { CookingBanner } from "../components/CookingBanner";
 import { useAgentChat } from "../hooks/useAgentChat";
 import { useTabBarInset } from "../hooks/useTabBarInset";
@@ -55,15 +57,68 @@ function ToolCard({ item }: { item: Extract<AgentUiMessage, { kind: "tool" }> })
   );
 }
 
+function formatAttachmentLabel(name: string, mimeType: string): string {
+  if (mimeType.startsWith("image/")) return "Image";
+  return name.includes(".") ? name.split(".").pop()?.toUpperCase() ?? "File" : "File";
+}
+
+function AttachmentChips({
+  attachments,
+}: {
+  attachments: Array<{ id: string; name: string; mimeType: string; previewUri?: string }>;
+}) {
+  if (attachments.length === 0) {
+    return null;
+  }
+
+  return (
+    <View style={styles.attachmentRow}>
+      {attachments.map((attachment) => (
+        <View key={attachment.id} style={styles.attachmentChip}>
+          {attachment.previewUri && attachment.mimeType.startsWith("image/") ? (
+            <Image source={{ uri: attachment.previewUri }} style={styles.attachmentThumb} />
+          ) : (
+            <View style={styles.attachmentIconWrap}>
+              <Ionicons name="document-outline" size={16} color="#58a6ff" />
+            </View>
+          )}
+          <View style={styles.attachmentMeta}>
+            <Text style={styles.attachmentName} numberOfLines={1}>
+              {attachment.name}
+            </Text>
+            <Text style={styles.attachmentKind}>
+              {formatAttachmentLabel(attachment.name, attachment.mimeType)}
+            </Text>
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function MessageBubble({ item }: { item: AgentUiMessage }) {
   if (item.kind === "user") {
+    const attachmentItems =
+      item.localAttachmentPreviews ??
+      item.attachments?.map((attachment) => ({
+        id: attachment.id,
+        name: attachment.name,
+        mimeType: attachment.mimeType,
+      })) ??
+      [];
+
     return (
       <View style={styles.messageBlock}>
         <Text style={[styles.senderLabel, styles.senderLabelYou]}>You</Text>
         <View style={[styles.bubble, styles.userBubble]}>
-          <Text style={styles.userText} selectable>
-            {item.content}
-          </Text>
+          {attachmentItems.length > 0 ? (
+            <AttachmentChips attachments={attachmentItems} />
+          ) : null}
+          {item.content.trim() ? (
+            <Text style={styles.userText} selectable>
+              {item.content}
+            </Text>
+          ) : null}
         </View>
       </View>
     );
@@ -102,6 +157,9 @@ function visibleMessages(messages: AgentUiMessage[]): AgentUiMessage[] {
   return messages.filter((item) => {
     if (item.kind === "assistant") {
       return item.content.trim().length > 0;
+    }
+    if (item.kind === "user") {
+      return item.content.trim().length > 0 || !!item.attachments?.length || !!item.localAttachmentPreviews?.length;
     }
     return true;
   });
@@ -142,6 +200,11 @@ export default function AgentScreen({
     chat.messages.length > 0;
 
   const hasWorkspace = !!workspacePath;
+  const canSend =
+    isConnected &&
+    hasWorkspace &&
+    !chat.isRunning &&
+    (chat.input.trim().length > 0 || chat.attachments.length > 0);
 
   return (
     <KeyboardAvoidingView
@@ -244,30 +307,73 @@ export default function AgentScreen({
       />
 
       <View style={[styles.inputRow, { marginBottom: tabBarInset }]}>
-        <TextInput
-          style={styles.input}
-          value={chat.input}
-          onChangeText={chat.setInput}
-          placeholder="Ask the agent..."
-          placeholderTextColor="#484f58"
-          multiline
-          editable={isConnected && !chat.isRunning && hasWorkspace}
-          contextMenuHidden={false}
-          selectionColor="#58a6ff"
-          selectTextOnFocus={false}
-        />
+        <Pressable
+          style={[
+            styles.attachBtn,
+            (!isConnected || chat.isRunning || !hasWorkspace) && styles.btnDisabled,
+          ]}
+          onPress={chat.pickAttachment}
+          disabled={!isConnected || chat.isRunning || !hasWorkspace}
+          accessibilityLabel="Attach file"
+        >
+          <Ionicons name="attach" size={22} color="#c9d1d9" />
+        </Pressable>
+        <View style={styles.inputColumn}>
+          {chat.attachments.length > 0 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.pendingAttachmentScroll}
+              contentContainerStyle={styles.pendingAttachmentList}
+            >
+              {chat.attachments.map((attachment) => (
+                <View key={attachment.id} style={styles.pendingAttachmentChip}>
+                  {attachment.previewUri && attachment.kind === "image" ? (
+                    <Image
+                      source={{ uri: attachment.previewUri }}
+                      style={styles.pendingAttachmentThumb}
+                    />
+                  ) : (
+                    <View style={styles.pendingAttachmentIcon}>
+                      <Ionicons name="document-outline" size={14} color="#58a6ff" />
+                    </View>
+                  )}
+                  <Text style={styles.pendingAttachmentName} numberOfLines={1}>
+                    {attachment.name}
+                  </Text>
+                  <Pressable
+                    style={styles.pendingAttachmentRemove}
+                    onPress={() => chat.removeAttachment(attachment.id)}
+                    hitSlop={8}
+                  >
+                    <Ionicons name="close-circle" size={18} color="#8b949e" />
+                  </Pressable>
+                </View>
+              ))}
+            </ScrollView>
+          ) : null}
+          <TextInput
+            style={styles.input}
+            value={chat.input}
+            onChangeText={chat.setInput}
+            placeholder="Ask the agent..."
+            placeholderTextColor="#484f58"
+            multiline
+            editable={isConnected && !chat.isRunning && hasWorkspace}
+            contextMenuHidden={false}
+            selectionColor="#58a6ff"
+            selectTextOnFocus={false}
+          />
+        </View>
         {chat.isRunning ? (
           <Pressable style={styles.stopBtn} onPress={chat.cancel}>
             <Text style={styles.stopBtnText}>Stop</Text>
           </Pressable>
         ) : (
           <Pressable
-            style={[
-              styles.sendBtn,
-              (!isConnected || !chat.input.trim() || !hasWorkspace) && styles.btnDisabled,
-            ]}
+            style={[styles.sendBtn, !canSend && styles.btnDisabled]}
             onPress={handleSend}
-            disabled={!isConnected || !chat.input.trim() || !hasWorkspace}
+            disabled={!canSend}
           >
             <Text style={styles.sendBtnText}>Send</Text>
           </Pressable>
@@ -479,8 +585,101 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#21262d",
   },
-  input: {
+  attachBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#161b22",
+    borderWidth: 1,
+    borderColor: "#30363d",
+  },
+  inputColumn: {
     flex: 1,
+    gap: 8,
+  },
+  pendingAttachmentScroll: {
+    maxHeight: 72,
+  },
+  pendingAttachmentList: {
+    gap: 8,
+    paddingRight: 4,
+  },
+  pendingAttachmentChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    maxWidth: 180,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: "#161b22",
+    borderWidth: 1,
+    borderColor: "#30363d",
+  },
+  pendingAttachmentThumb: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+  },
+  pendingAttachmentIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#0d1117",
+  },
+  pendingAttachmentName: {
+    flexShrink: 1,
+    color: "#c9d1d9",
+    fontSize: 12,
+    maxWidth: 96,
+  },
+  pendingAttachmentRemove: {
+    marginLeft: 2,
+  },
+  attachmentRow: {
+    gap: 8,
+    marginBottom: 8,
+  },
+  attachmentChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  attachmentThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+  },
+  attachmentIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(1,4,9,0.25)",
+  },
+  attachmentMeta: {
+    flex: 1,
+    minWidth: 0,
+  },
+  attachmentName: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  attachmentKind: {
+    color: "rgba(255,255,255,0.72)",
+    fontSize: 11,
+    marginTop: 2,
+  },
+  input: {
     minHeight: 44,
     maxHeight: 120,
     backgroundColor: "#161b22",

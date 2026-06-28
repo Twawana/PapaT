@@ -41,6 +41,7 @@ import {
 } from "./projects";
 import {
   ClientMessage,
+  AgentAttachmentPayload,
   parseClientMessage,
   serializeServerMessage,
   ServerMessage,
@@ -69,6 +70,7 @@ import {
   listAgentSessions,
   runAgentTurn,
 } from "./agent/loop";
+import { validateAttachments } from "./agent/attachments";
 import {
   getVscodeStatus,
   initVscodeBridge,
@@ -349,7 +351,13 @@ function handleMessage(
       break;
 
     case "agent_send":
-      handleAgentSend(ws, message.id, message.sessionId, message.message);
+      handleAgentSend(
+        ws,
+        message.id,
+        message.sessionId,
+        message.message,
+        message.attachments
+      );
       break;
 
     case "agent_cancel":
@@ -971,7 +979,8 @@ function handleAgentSend(
   ws: WebSocket,
   id: string,
   sessionId: string,
-  userMessage: string
+  userMessage: string,
+  attachments?: AgentAttachmentPayload[]
 ): void {
   if (!requireRequestId(ws, id)) return;
 
@@ -980,19 +989,37 @@ function handleAgentSend(
     return;
   }
 
-  if (!userMessage?.trim()) {
+  const trimmed = userMessage?.trim() ?? "";
+  const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+
+  if (!trimmed && !hasAttachments) {
     send(ws, { type: "agent_error", id, sessionId, message: "Message is empty" });
     return;
   }
 
-  if (userMessage.length > 20_000) {
+  if (trimmed.length > 20_000) {
     send(ws, { type: "agent_error", id, sessionId, message: "Message too long" });
     return;
   }
 
-  console.log(`[Titus Host] Agent message (${sessionId.slice(0, 8)}): ${userMessage.slice(0, 80)}`);
+  try {
+    validateAttachments(attachments);
+  } catch (err) {
+    send(ws, {
+      type: "agent_error",
+      id,
+      sessionId,
+      message: err instanceof Error ? err.message : "Invalid attachments",
+    });
+    return;
+  }
 
-  void runAgentTurn(sessionId, userMessage.trim(), id, (message) => send(ws, message));
+  const preview = trimmed || `[${attachments?.length ?? 0} attachment(s)]`;
+  console.log(
+    `[Titus Host] Agent message (${sessionId.slice(0, 8)}): ${preview.slice(0, 80)}`
+  );
+
+  void runAgentTurn(sessionId, trimmed, id, (message) => send(ws, message), attachments);
 }
 
 function handleAgentCancel(ws: WebSocket, sessionId: string): void {

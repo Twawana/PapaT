@@ -272,9 +272,13 @@ export class TitusClient {
     );
   }
 
-  sendAgentMessage(sessionId: string, message: string): string {
+  sendAgentMessage(
+    sessionId: string,
+    message: string,
+    attachments?: import("../types/protocol").AgentAttachmentPayload[]
+  ): string {
     const id = createRequestId("agent-send");
-    this.send({ type: "agent_send", id, sessionId, message });
+    this.send({ type: "agent_send", id, sessionId, message, attachments });
     return id;
   }
 

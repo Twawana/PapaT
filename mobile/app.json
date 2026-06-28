@@ -34,6 +34,13 @@
           "cameraPermission": "Allow Titus to scan the pairing QR code on your PC."
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Titus to attach photos to agent prompts.",
+          "cameraPermission": "Allow Titus to take photos for agent prompts."
+        }
+      ],
       "expo-secure-store"
     ]
   }
