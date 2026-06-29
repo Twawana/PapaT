@@ -1,5 +1,6 @@
 import React from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
+import { useThemedStyles } from "../hooks/useThemedStyles";
 
 export interface EditorTab {
   path: string;
@@ -14,6 +15,56 @@ interface Props {
 }
 
 export function EditorTabs({ tabs, activePath, onSelect, onClose }: Props) {
+  const styles = useThemedStyles((c) => ({
+    bar: {
+      maxHeight: 40,
+      marginBottom: 8,
+    },
+    empty: {
+      paddingVertical: 8,
+      marginBottom: 8,
+    },
+    emptyText: {
+      color: c.textMuted,
+      fontSize: 13,
+    },
+    tab: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 8,
+      paddingLeft: 10,
+      paddingRight: 4,
+      paddingVertical: 6,
+      marginRight: 6,
+      maxWidth: 180,
+    },
+    tabActive: {
+      borderColor: c.accent,
+      backgroundColor: c.background,
+    },
+    tabText: {
+      color: c.textMuted,
+      fontSize: 12,
+      maxWidth: 130,
+    },
+    tabTextActive: {
+      color: c.textPrimary,
+      fontWeight: "600",
+    },
+    closeBtn: {
+      marginLeft: 4,
+      paddingHorizontal: 4,
+    },
+    closeText: {
+      color: c.textMuted,
+      fontSize: 16,
+      lineHeight: 18,
+    },
+  }));
+
   if (tabs.length === 0) {
     return (
       <View style={styles.empty}>
@@ -51,53 +102,3 @@ export function EditorTabs({ tabs, activePath, onSelect, onClose }: Props) {
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  bar: {
-    maxHeight: 40,
-    marginBottom: 8,
-  },
-  empty: {
-    paddingVertical: 8,
-    marginBottom: 8,
-  },
-  emptyText: {
-    color: "#8b949e",
-    fontSize: 13,
-  },
-  tab: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#161b22",
-    borderWidth: 1,
-    borderColor: "#30363d",
-    borderRadius: 8,
-    paddingLeft: 10,
-    paddingRight: 4,
-    paddingVertical: 6,
-    marginRight: 6,
-    maxWidth: 180,
-  },
-  tabActive: {
-    borderColor: "#1f6feb",
-    backgroundColor: "#0d1117",
-  },
-  tabText: {
-    color: "#8b949e",
-    fontSize: 12,
-    maxWidth: 130,
-  },
-  tabTextActive: {
-    color: "#f0f6fc",
-    fontWeight: "600",
-  },
-  closeBtn: {
-    marginLeft: 4,
-    paddingHorizontal: 4,
-  },
-  closeText: {
-    color: "#8b949e",
-    fontSize: 16,
-    lineHeight: 18,
-  },
-});

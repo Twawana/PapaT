@@ -1,4 +1,5 @@
 import { config } from "../../config";
+import { credentialHint } from "../agent-credentials";
 import { getWorkspaceRoot } from "../../workspace-state";
 import {
   checkCursorAuth,
@@ -14,8 +15,14 @@ import {
   setCursorChatId,
   setSessionChild,
   setSessionRunning,
+  touchSessionMessages,
 } from "../session-store";
-import { findCommandOnPath, looksUnauthenticated, runCli } from "./cli-utils";
+import { findCommandOnPath, looksUnauthenticated, parseClaudeAuthStatus, runCli } from "./cli-utils";
+import {
+  getProviderInstallPath,
+  installPathStatusSuffix,
+  resolveProviderCliCommand,
+} from "../agent-install-paths";
 import { AgentProviderDefinition, AgentProviderRunContext } from "./types";
 
 const AUTH_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -25,6 +32,10 @@ function cacheAuth(ok: boolean, message: string): void {
   authCache = ok
     ? { ok: true, message, expiresAt: Date.now() + AUTH_CACHE_TTL_MS }
     : null;
+}
+
+export function clearCliAuthCache(): void {
+  authCache = null;
 }
 
 async function runCursorTurn(ctx: AgentProviderRunContext): Promise<void> {
@@ -44,12 +55,15 @@ async function runCursorTurn(ctx: AgentProviderRunContext): Promise<void> {
   setSessionRunning(sessionId, true, abortController);
 
   const session = getSession(sessionId);
-  session.messages.push({
-    role: "user",
-    content: prepared.displayText,
-    attachments: prepared.attachmentRefs.length ? prepared.attachmentRefs : undefined,
-    timestamp: Date.now(),
-  });
+  if (!ctx.skipUserMessage) {
+    session.messages.push({
+      role: "user",
+      content: prepared.displayText,
+      attachments: prepared.attachmentRefs.length ? prepared.attachmentRefs : undefined,
+      timestamp: Date.now(),
+    });
+    touchSessionMessages(sessionId);
+  }
 
   emit({ type: "agent_started", id: requestId, sessionId });
 
@@ -110,6 +124,7 @@ async function runCursorTurn(ctx: AgentProviderRunContext): Promise<void> {
       content: finalContent,
       timestamp: Date.now(),
     });
+    touchSessionMessages(sessionId);
 
     if (!fullText.trim()) {
       emit({ type: "agent_delta", sessionId, content: finalContent });
@@ -149,18 +164,23 @@ export const cursorProvider: AgentProviderDefinition = {
         installed: false,
         authenticated: false,
         statusMessage: "Cursor CLI not installed",
+        installPath: getProviderInstallPath("cursor"),
       };
     }
 
     const auth = await checkCursorAuth(undefined, { force: options?.force });
     cacheAuth(auth.ok, auth.message);
+    const hint = credentialHint("cursor");
+    const pathHint = installPathStatusSuffix("cursor");
+    const statusMessage = `${hint ? `${auth.message} · ${hint}` : auth.message}${pathHint ?? ""}`;
     return {
       id: "cursor",
       label: "Cursor",
       description: "Cursor Agent CLI logged in on this PC",
       installed: true,
       authenticated: auth.ok,
-      statusMessage: auth.message,
+      statusMessage,
+      installPath: getProviderInstallPath("cursor"),
     };
   },
   runTurn: runCursorTurn,
@@ -171,7 +191,7 @@ export const claudeProvider: AgentProviderDefinition = {
   label: "Claude Code",
   description: "Anthropic Claude Code CLI",
   async probe() {
-    const command = findCommandOnPath(["claude"]);
+    const command = resolveProviderCliCommand("claude");
     if (!command) {
       return {
         id: "claude",
@@ -180,6 +200,7 @@ export const claudeProvider: AgentProviderDefinition = {
         installed: false,
         authenticated: false,
         statusMessage: "Claude Code CLI not installed",
+        installPath: getProviderInstallPath("claude"),
       };
     }
 
@@ -189,23 +210,12 @@ export const claudeProvider: AgentProviderDefinition = {
       });
       const version = `${stdout}\n${stderr}`.trim().split(/\r?\n/)[0] || "installed";
 
-      const authCheck = await runCli(
-        command,
-        [
-          "-p",
-          "Reply with exactly: ok",
-          "--bare",
-          "--output-format",
-          "text",
-          "--max-turns",
-          "1",
-          "--allowedTools",
-          "",
-        ],
-        { timeoutMs: 45_000 }
-      );
+      const authCheck = await runCli(command, ["auth", "status"], {
+        timeoutMs: 15_000,
+      });
       const authOutput = `${authCheck.stdout}\n${authCheck.stderr}`.trim();
-      const authenticated = !looksUnauthenticated(authOutput, authCheck.code);
+      const auth = parseClaudeAuthStatus(authOutput, authCheck.code);
+      const authenticated = auth.authenticated;
 
       return {
         id: "claude",
@@ -213,9 +223,11 @@ export const claudeProvider: AgentProviderDefinition = {
         description: "Anthropic Claude Code CLI",
         installed: true,
         authenticated,
-        statusMessage: authenticated
-          ? version
-          : authOutput || "Run `claude login` on your PC",
+        statusMessage: (authenticated
+          ? `${version} · ${auth.message}`
+          : authOutput || auth.message || "Run `claude login` on your PC") +
+          (installPathStatusSuffix("claude") ?? ""),
+        installPath: getProviderInstallPath("claude"),
       };
     } catch (err) {
       return {
@@ -229,7 +241,7 @@ export const claudeProvider: AgentProviderDefinition = {
     }
   },
   runTurn: async (ctx) => {
-    const command = findCommandOnPath(["claude"]);
+    const command = resolveProviderCliCommand("claude");
     if (!command) {
       ctx.emit({
         type: "agent_error",
@@ -259,7 +271,7 @@ export const copilotProvider: AgentProviderDefinition = {
   label: "GitHub Copilot",
   description: "GitHub Copilot CLI",
   async probe() {
-    const command = findCommandOnPath(["copilot"]);
+    const command = resolveProviderCliCommand("copilot");
     if (!command) {
       return {
         id: "copilot",
@@ -268,6 +280,7 @@ export const copilotProvider: AgentProviderDefinition = {
         installed: false,
         authenticated: false,
         statusMessage: "Copilot CLI not installed. Install from GitHub Copilot CLI docs.",
+        installPath: getProviderInstallPath("copilot"),
       };
     }
 
@@ -290,9 +303,10 @@ export const copilotProvider: AgentProviderDefinition = {
         description: "GitHub Copilot CLI",
         installed: true,
         authenticated,
-        statusMessage: authenticated
+        statusMessage: (authenticated
           ? version
-          : authOutput || "Sign in to GitHub Copilot CLI on your PC",
+          : authOutput || "Sign in to GitHub Copilot CLI on your PC") + (installPathStatusSuffix("copilot") ?? ""),
+        installPath: getProviderInstallPath("copilot"),
       };
     } catch (err) {
       return {
@@ -306,7 +320,7 @@ export const copilotProvider: AgentProviderDefinition = {
     }
   },
   runTurn: async (ctx) => {
-    const command = findCommandOnPath(["copilot"]);
+    const command = resolveProviderCliCommand("copilot");
     if (!command) {
       ctx.emit({
         type: "agent_error",
@@ -332,7 +346,7 @@ export const augmentProvider: AgentProviderDefinition = {
   label: "Augment",
   description: "Augment Auggie CLI",
   async probe() {
-    const command = findCommandOnPath(["auggie"]);
+    const command = resolveProviderCliCommand("augment");
     if (!command) {
       return {
         id: "augment",
@@ -341,6 +355,7 @@ export const augmentProvider: AgentProviderDefinition = {
         installed: false,
         authenticated: false,
         statusMessage: "Auggie CLI not installed",
+        installPath: getProviderInstallPath("augment"),
       };
     }
 
@@ -363,9 +378,10 @@ export const augmentProvider: AgentProviderDefinition = {
         description: "Augment Auggie CLI",
         installed: true,
         authenticated,
-        statusMessage: authenticated
+        statusMessage: (authenticated
           ? version
-          : authOutput || "Run `auggie login` on your PC",
+          : authOutput || "Run `auggie login` on your PC") + (installPathStatusSuffix("augment") ?? ""),
+        installPath: getProviderInstallPath("augment"),
       };
     } catch (err) {
       return {
@@ -379,7 +395,7 @@ export const augmentProvider: AgentProviderDefinition = {
     }
   },
   runTurn: async (ctx) => {
-    const command = findCommandOnPath(["auggie"]);
+    const command = resolveProviderCliCommand("augment");
     if (!command) {
       ctx.emit({
         type: "agent_error",
@@ -415,12 +431,15 @@ async function runGenericCliTurn(
   setSessionRunning(sessionId, true, abortController);
 
   const session = getSession(sessionId);
-  session.messages.push({
-    role: "user",
-    content: prepared.displayText,
-    attachments: prepared.attachmentRefs.length ? prepared.attachmentRefs : undefined,
-    timestamp: Date.now(),
-  });
+  if (!ctx.skipUserMessage) {
+    session.messages.push({
+      role: "user",
+      content: prepared.displayText,
+      attachments: prepared.attachmentRefs.length ? prepared.attachmentRefs : undefined,
+      timestamp: Date.now(),
+    });
+    touchSessionMessages(sessionId);
+  }
 
   emit({ type: "agent_started", id: requestId, sessionId });
 
@@ -448,6 +467,7 @@ async function runGenericCliTurn(
       content: finalContent,
       timestamp: Date.now(),
     });
+    touchSessionMessages(sessionId);
 
     if (!fullText.trim()) {
       emit({ type: "agent_delta", sessionId, content: finalContent });

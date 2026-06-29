@@ -1,5 +1,7 @@
 import React from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
+import { useTheme } from "../context/ThemeContext";
+import { useThemedStyles } from "../hooks/useThemedStyles";
 import { dismissKeyboard } from "../utils/keyboard";
 
 interface Props {
@@ -11,6 +13,50 @@ interface Props {
 }
 
 export function FindBar({ visible, query, onChangeQuery, onFindNext, onClose }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles((c) => ({
+    bar: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 8,
+    },
+    input: {
+      flex: 1,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 8,
+      color: c.textPrimary,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      fontSize: 14,
+    },
+    btn: {
+      backgroundColor: c.buttonPrimary,
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
+    btnGhost: {
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    btnText: {
+      color: c.onPrimary,
+      fontSize: 13,
+      fontWeight: "600",
+    },
+    btnGhostText: {
+      color: c.textPrimary,
+      fontSize: 13,
+      fontWeight: "600",
+    },
+  }));
+
   if (!visible) return null;
 
   return (
@@ -20,7 +66,7 @@ export function FindBar({ visible, query, onChangeQuery, onFindNext, onClose }: 
         value={query}
         onChangeText={onChangeQuery}
         placeholder="Find in file..."
-        placeholderTextColor="#484f58"
+        placeholderTextColor={colors.placeholder}
         autoCapitalize="none"
         autoCorrect={false}
         returnKeyType="search"
@@ -30,50 +76,15 @@ export function FindBar({ visible, query, onChangeQuery, onFindNext, onClose }: 
       <Pressable style={styles.btn} onPress={onFindNext}>
         <Text style={styles.btnText}>Next</Text>
       </Pressable>
-      <Pressable style={styles.btnGhost} onPress={() => {
-        dismissKeyboard();
-        onClose();
-      }}>
-        <Text style={styles.btnText}>Close</Text>
+      <Pressable
+        style={styles.btnGhost}
+        onPress={() => {
+          dismissKeyboard();
+          onClose();
+        }}
+      >
+        <Text style={styles.btnGhostText}>Close</Text>
       </Pressable>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  bar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 8,
-  },
-  input: {
-    flex: 1,
-    backgroundColor: "#161b22",
-    borderWidth: 1,
-    borderColor: "#30363d",
-    borderRadius: 8,
-    color: "#f0f6fc",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 14,
-  },
-  btn: {
-    backgroundColor: "#1f6feb",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  btnGhost: {
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: "#30363d",
-  },
-  btnText: {
-    color: "#f0f6fc",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-});

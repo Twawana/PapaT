@@ -1,4 +1,6 @@
 import { getActiveAgentProviderId, setActiveAgentProviderId } from "../provider-store";
+import { clearCursorAuthCache } from "../cursor-cli";
+import { clearCliAuthCache } from "./cli-providers";
 import {
   augmentProvider,
   claudeProvider,
@@ -85,12 +87,30 @@ export async function runActiveAgentTurn(ctx: AgentProviderRunContext): Promise<
   await provider.runTurn(ctx);
 }
 
-export function selectAgentProvider(providerId: AgentProviderId): AgentProviderStatus | null {
+export async function selectAgentProvider(providerId: AgentProviderId): Promise<{
+  providers: AgentProviderStatus[];
+  activeProviderId: AgentProviderId;
+} | null> {
   if (!providerMap.has(providerId)) {
     return null;
   }
   setActiveAgentProviderId(providerId);
-  return null;
+  const providers = await probeAgentProviders();
+  return { providers, activeProviderId: providerId };
+}
+
+export async function refreshAgentProviders(options?: {
+  force?: boolean;
+}): Promise<{
+  providers: AgentProviderStatus[];
+  activeProviderId: AgentProviderId;
+}> {
+  clearCursorAuthCache();
+  clearCliAuthCache();
+  return {
+    providers: await probeAgentProviders(options),
+    activeProviderId: getActiveAgentProviderId(),
+  };
 }
 
 export { getActiveAgentProviderId, setActiveAgentProviderId };

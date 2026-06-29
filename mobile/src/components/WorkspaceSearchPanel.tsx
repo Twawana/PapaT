@@ -8,6 +8,8 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useTheme } from "../context/ThemeContext";
+import { useThemedStyles } from "../hooks/useThemedStyles";
 import { titusClient } from "../services/websocket";
 import { GrepHit } from "../types/protocol";
 
@@ -16,6 +18,71 @@ interface Props {
 }
 
 export function WorkspaceSearchPanel({ onOpen }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles((c) => ({
+    container: {
+      flex: 1,
+      backgroundColor: c.background,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 8,
+      padding: 8,
+    },
+    searchRow: {
+      flexDirection: "row",
+      gap: 8,
+      marginBottom: 8,
+    },
+    input: {
+      flex: 1,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 8,
+      color: c.textPrimary,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      fontSize: 14,
+    },
+    btn: {
+      backgroundColor: c.buttonSecondary,
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    btnText: {
+      color: c.textPrimary,
+      fontWeight: "600",
+      fontSize: 13,
+    },
+    loader: {
+      marginBottom: 8,
+    },
+    row: {
+      paddingVertical: 8,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.surfaceElevated,
+    },
+    path: {
+      color: c.link,
+      fontSize: 12,
+      fontWeight: "600",
+    },
+    line: {
+      color: c.textSecondary,
+      fontSize: 13,
+      marginTop: 2,
+      fontFamily: "monospace",
+    },
+    empty: {
+      color: c.textMuted,
+      textAlign: "center",
+      paddingVertical: 12,
+    },
+  }));
+
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<GrepHit[]>([]);
   const [loading, setLoading] = useState(false);
@@ -49,7 +116,7 @@ export function WorkspaceSearchPanel({ onOpen }: Props) {
           value={query}
           onChangeText={setQuery}
           placeholder="Search in workspace..."
-          placeholderTextColor="#484f58"
+          placeholderTextColor={colors.placeholder}
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="search"
@@ -60,7 +127,9 @@ export function WorkspaceSearchPanel({ onOpen }: Props) {
         </Pressable>
       </View>
 
-      {loading ? <ActivityIndicator color="#58a6ff" style={styles.loader} /> : null}
+      {loading ? (
+        <ActivityIndicator color={colors.accent} style={styles.loader} />
+      ) : null}
 
       <FlatList
         data={hits}
@@ -84,67 +153,3 @@ export function WorkspaceSearchPanel({ onOpen }: Props) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0d1117",
-    borderWidth: 1,
-    borderColor: "#30363d",
-    borderRadius: 8,
-    padding: 8,
-  },
-  searchRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 8,
-  },
-  input: {
-    flex: 1,
-    backgroundColor: "#161b22",
-    borderWidth: 1,
-    borderColor: "#30363d",
-    borderRadius: 8,
-    color: "#f0f6fc",
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    fontSize: 14,
-  },
-  btn: {
-    backgroundColor: "#21262d",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#30363d",
-  },
-  btnText: {
-    color: "#f0f6fc",
-    fontWeight: "600",
-    fontSize: 13,
-  },
-  loader: {
-    marginBottom: 8,
-  },
-  row: {
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#21262d",
-  },
-  path: {
-    color: "#58a6ff",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  line: {
-    color: "#c9d1d9",
-    fontSize: 13,
-    marginTop: 2,
-    fontFamily: "monospace",
-  },
-  empty: {
-    color: "#8b949e",
-    textAlign: "center",
-    paddingVertical: 12,
-  },
-});

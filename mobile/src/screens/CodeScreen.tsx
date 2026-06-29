@@ -18,7 +18,9 @@ import { QuickOpenModal } from "../components/QuickOpenModal";
 import { TerminalOutput } from "../components/TerminalOutput";
 import { WorkspaceSearchPanel } from "../components/WorkspaceSearchPanel";
 import { editorModeFromPath, useEditor } from "../context/EditorContext";
+import { useTheme } from "../context/ThemeContext";
 import { useTabBarInset } from "../hooks/useTabBarInset";
+import { useThemedStyles } from "../hooks/useThemedStyles";
 import { titusClient } from "../services/websocket";
 import { snippetsForLanguage } from "../services/snippets";
 import {
@@ -51,6 +53,199 @@ export default function CodeScreen({
   workspaceName,
   onError,
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles((c) => ({
+    flex: { flex: 1 },
+    workspaceBanner: {
+      color: c.link,
+      fontSize: 12,
+      fontWeight: "600",
+      marginBottom: 6,
+    },
+    toolbar: {
+      maxHeight: 44,
+      marginBottom: 8,
+    },
+    toolBtn: {
+      backgroundColor: c.buttonSecondary,
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      marginRight: 6,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    toolText: {
+      color: c.textSecondary,
+      fontSize: 12,
+      fontWeight: "600",
+    },
+    runBtn: {
+      backgroundColor: c.buttonPrimary,
+      borderRadius: 8,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      marginRight: 6,
+    },
+    runText: {
+      color: c.onPrimary,
+      fontWeight: "700",
+      fontSize: 12,
+    },
+    disabled: { opacity: 0.5 },
+    queueHint: {
+      color: c.warning,
+      fontSize: 11,
+      marginBottom: 6,
+    },
+    langRow: {
+      maxHeight: 36,
+      marginBottom: 8,
+    },
+    langChip: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 16,
+      backgroundColor: c.buttonSecondary,
+      marginRight: 6,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    langChipActive: {
+      borderColor: c.buttonPrimary,
+      backgroundColor: c.surface,
+    },
+    langChipText: {
+      color: c.textMuted,
+      fontSize: 11,
+      textTransform: "capitalize",
+    },
+    langChipTextActive: {
+      color: c.link,
+      fontWeight: "700",
+    },
+    editorRow: {
+      flex: 1,
+      flexDirection: "row",
+      minHeight: 160,
+      marginBottom: 8,
+    },
+    editorMain: {
+      flex: 1,
+    },
+    placeholder: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 8,
+      padding: 16,
+    },
+    placeholderTitle: {
+      color: c.textPrimary,
+      fontSize: 18,
+      fontWeight: "700",
+      marginBottom: 8,
+    },
+    placeholderText: {
+      color: c.textMuted,
+      textAlign: "center",
+      marginBottom: 12,
+      lineHeight: 20,
+    },
+    placeholderHint: {
+      color: c.placeholder,
+      fontSize: 12,
+      textAlign: "center",
+    },
+    primaryBtn: {
+      backgroundColor: c.buttonPrimary,
+      borderRadius: 8,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+    },
+    primaryBtnText: {
+      color: c.onPrimary,
+      fontWeight: "700",
+    },
+    scriptRow: {
+      maxHeight: 36,
+      marginBottom: 8,
+    },
+    scriptChip: {
+      backgroundColor: c.surfaceElevated,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      marginRight: 6,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    scriptText: {
+      color: c.link,
+      fontSize: 11,
+      fontFamily: "monospace",
+    },
+    bottomTabs: {
+      flexDirection: "row",
+      marginBottom: 6,
+      gap: 6,
+    },
+    bottomTab: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 6,
+      backgroundColor: c.surfaceElevated,
+    },
+    bottomTabActive: {
+      backgroundColor: c.surfaceMuted,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    bottomTabText: {
+      color: c.textMuted,
+      fontSize: 12,
+    },
+    bottomTabTextActive: {
+      color: c.textPrimary,
+      fontWeight: "600",
+    },
+    bottomPanel: {
+      flex: 1,
+      minHeight: 120,
+      marginBottom: 4,
+    },
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: `${c.shadow}B3`,
+      justifyContent: "center",
+      padding: 24,
+    },
+    modalSheet: {
+      backgroundColor: c.surfaceElevated,
+      borderRadius: 12,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    modalTitle: {
+      color: c.textPrimary,
+      fontSize: 16,
+      fontWeight: "700",
+      marginBottom: 12,
+    },
+    snippetRow: {
+      paddingVertical: 10,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.border,
+    },
+    snippetLabel: {
+      color: c.textSecondary,
+      fontSize: 14,
+    },
+  }));
   const editor = useEditor();
   const editorRef = useRef<CodeEditorHandle>(null);
   const tabBarInset = useTabBarInset();
@@ -218,7 +413,7 @@ export default function CodeScreen({
     if (activeFile.loading) {
       return (
         <View style={styles.placeholder}>
-          <ActivityIndicator color="#58a6ff" />
+          <ActivityIndicator color={colors.iconAccent} />
         </View>
       );
     }
@@ -443,196 +638,3 @@ export default function CodeScreen({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  workspaceBanner: {
-    color: "#58a6ff",
-    fontSize: 12,
-    fontWeight: "600",
-    marginBottom: 6,
-  },
-  toolbar: {
-    maxHeight: 44,
-    marginBottom: 8,
-  },
-  toolBtn: {
-    backgroundColor: "#21262d",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginRight: 6,
-    borderWidth: 1,
-    borderColor: "#30363d",
-  },
-  toolText: {
-    color: "#c9d1d9",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  runBtn: {
-    backgroundColor: "#1f6feb",
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginRight: 6,
-  },
-  runText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 12,
-  },
-  disabled: { opacity: 0.5 },
-  queueHint: {
-    color: "#d29922",
-    fontSize: 11,
-    marginBottom: 6,
-  },
-  langRow: {
-    maxHeight: 36,
-    marginBottom: 8,
-  },
-  langChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: "#21262d",
-    marginRight: 6,
-    borderWidth: 1,
-    borderColor: "#30363d",
-  },
-  langChipActive: {
-    borderColor: "#1f6feb",
-    backgroundColor: "#0d1117",
-  },
-  langChipText: {
-    color: "#8b949e",
-    fontSize: 11,
-    textTransform: "capitalize",
-  },
-  langChipTextActive: {
-    color: "#58a6ff",
-    fontWeight: "700",
-  },
-  editorRow: {
-    flex: 1,
-    flexDirection: "row",
-    minHeight: 160,
-    marginBottom: 8,
-  },
-  editorMain: {
-    flex: 1,
-  },
-  placeholder: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#0d1117",
-    borderWidth: 1,
-    borderColor: "#30363d",
-    borderRadius: 8,
-    padding: 16,
-  },
-  placeholderTitle: {
-    color: "#f0f6fc",
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 8,
-  },
-  placeholderText: {
-    color: "#8b949e",
-    textAlign: "center",
-    marginBottom: 12,
-    lineHeight: 20,
-  },
-  placeholderHint: {
-    color: "#484f58",
-    fontSize: 12,
-    textAlign: "center",
-  },
-  primaryBtn: {
-    backgroundColor: "#1f6feb",
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  primaryBtnText: {
-    color: "#fff",
-    fontWeight: "700",
-  },
-  scriptRow: {
-    maxHeight: 36,
-    marginBottom: 8,
-  },
-  scriptChip: {
-    backgroundColor: "#161b22",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginRight: 6,
-    borderWidth: 1,
-    borderColor: "#30363d",
-  },
-  scriptText: {
-    color: "#79c0ff",
-    fontSize: 11,
-    fontFamily: "monospace",
-  },
-  bottomTabs: {
-    flexDirection: "row",
-    marginBottom: 6,
-    gap: 6,
-  },
-  bottomTab: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    backgroundColor: "#161b22",
-  },
-  bottomTabActive: {
-    backgroundColor: "#21262d",
-    borderWidth: 1,
-    borderColor: "#30363d",
-  },
-  bottomTabText: {
-    color: "#8b949e",
-    fontSize: 12,
-  },
-  bottomTabTextActive: {
-    color: "#f0f6fc",
-    fontWeight: "600",
-  },
-  bottomPanel: {
-    flex: 1,
-    minHeight: 120,
-    marginBottom: 4,
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(1,4,9,0.7)",
-    justifyContent: "center",
-    padding: 24,
-  },
-  modalSheet: {
-    backgroundColor: "#161b22",
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#30363d",
-  },
-  modalTitle: {
-    color: "#f0f6fc",
-    fontSize: 16,
-    fontWeight: "700",
-    marginBottom: 12,
-  },
-  snippetRow: {
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#30363d",
-  },
-  snippetLabel: {
-    color: "#c9d1d9",
-    fontSize: 14,
-  },
-});

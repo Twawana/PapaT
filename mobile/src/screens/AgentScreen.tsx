@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
   Image,
@@ -13,19 +13,34 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { CookingBanner } from "../components/CookingBanner";
+import { AgentProviderModal } from "../components/AgentProviderModal";
+import { AgentTryAgainModal } from "../components/AgentTryAgainModal";
+import { AgentWorkspaceModal } from "../components/AgentWorkspaceModal";
+import { useTheme } from "../context/ThemeContext";
 import { useAgentChat } from "../hooks/useAgentChat";
 import { useTabBarInset } from "../hooks/useTabBarInset";
+import { ThemeColors } from "../theme/colors";
 import { AgentUiMessage } from "../types/protocol";
 import { dismissKeyboard, keyboardAvoidBehavior, keyboardPersistTaps } from "../utils/keyboard";
+import { titusClient } from "../services/websocket";
 
 interface Props {
   isConnected: boolean;
   workspacePath: string | null;
   workspaceName: string;
+  onWorkspaceChange: (path: string, name: string) => void;
   onError: (message: string | null) => void;
 }
 
-function ToolCard({ item }: { item: Extract<AgentUiMessage, { kind: "tool" }> }) {
+type AgentScreenStyles = ReturnType<typeof createAgentStyles>;
+
+function ToolCard({
+  item,
+  styles,
+}: {
+  item: Extract<AgentUiMessage, { kind: "tool" }>;
+  styles: AgentScreenStyles;
+}) {
   const argsPreview = item.args
     ? Object.entries(item.args)
         .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
@@ -64,8 +79,12 @@ function formatAttachmentLabel(name: string, mimeType: string): string {
 
 function AttachmentChips({
   attachments,
+  styles,
+  colors,
 }: {
   attachments: Array<{ id: string; name: string; mimeType: string; previewUri?: string }>;
+  styles: AgentScreenStyles;
+  colors: ThemeColors;
 }) {
   if (attachments.length === 0) {
     return null;
@@ -79,7 +98,7 @@ function AttachmentChips({
             <Image source={{ uri: attachment.previewUri }} style={styles.attachmentThumb} />
           ) : (
             <View style={styles.attachmentIconWrap}>
-              <Ionicons name="document-outline" size={16} color="#58a6ff" />
+              <Ionicons name="document-outline" size={16} color={colors.iconAccent} />
             </View>
           )}
           <View style={styles.attachmentMeta}>
@@ -96,7 +115,15 @@ function AttachmentChips({
   );
 }
 
-function MessageBubble({ item }: { item: AgentUiMessage }) {
+function MessageBubble({
+  item,
+  styles,
+  colors,
+}: {
+  item: AgentUiMessage;
+  styles: AgentScreenStyles;
+  colors: ThemeColors;
+}) {
   if (item.kind === "user") {
     const attachmentItems =
       item.localAttachmentPreviews ??
@@ -112,7 +139,7 @@ function MessageBubble({ item }: { item: AgentUiMessage }) {
         <Text style={[styles.senderLabel, styles.senderLabelYou]}>You</Text>
         <View style={[styles.bubble, styles.userBubble]}>
           {attachmentItems.length > 0 ? (
-            <AttachmentChips attachments={attachmentItems} />
+            <AttachmentChips attachments={attachmentItems} styles={styles} colors={colors} />
           ) : null}
           {item.content.trim() ? (
             <Text style={styles.userText} selectable>
@@ -138,7 +165,7 @@ function MessageBubble({ item }: { item: AgentUiMessage }) {
   }
 
   if (item.kind === "tool") {
-    return <ToolCard item={item} />;
+    return <ToolCard item={item} styles={styles} />;
   }
 
   return (
@@ -169,11 +196,35 @@ export default function AgentScreen({
   isConnected,
   workspacePath,
   workspaceName,
+  onWorkspaceChange,
   onError,
 }: Props) {
   const listRef = useRef<FlatList>(null);
   const chat = useAgentChat(isConnected, onError);
   const tabBarInset = useTabBarInset();
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(
+    () => StyleSheet.create(createAgentStyles(colors, isDark)),
+    [colors, isDark]
+  );
+  const [providerModalVisible, setProviderModalVisible] = useState(false);
+  const [workspaceModalVisible, setWorkspaceModalVisible] = useState(false);
+  const [activeAgentLabel, setActiveAgentLabel] = useState("Cursor");
+
+  useEffect(() => {
+    if (!isConnected) return;
+    void titusClient
+      .listAgentProviders(false)
+      .then((result) => {
+        const active = result.providers.find((item) => item.id === result.activeProviderId);
+        if (active) {
+          setActiveAgentLabel(active.label);
+        }
+      })
+      .catch(() => {
+        // Non-blocking; modal refresh handles errors.
+      });
+  }, [isConnected]);
 
   const displayMessages = useMemo(
     () => visibleMessages(chat.messages),
@@ -206,6 +257,12 @@ export default function AgentScreen({
     !chat.isRunning &&
     (chat.input.trim().length > 0 || chat.attachments.length > 0);
 
+  const openWorkspaceModal = () => {
+    if (!isConnected) return;
+    dismissKeyboard();
+    setWorkspaceModalVisible(true);
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -213,21 +270,59 @@ export default function AgentScreen({
       keyboardVerticalOffset={Platform.OS === "ios" ? 88 : 0}
     >
       <View style={styles.toolbar}>
-        <View style={styles.titleBlock}>
+        <Pressable
+          style={styles.titleBlock}
+          onPress={openWorkspaceModal}
+          disabled={!isConnected}
+        >
           <Text style={styles.title}>AI Agent</Text>
           {hasWorkspace ? (
+            <View style={styles.workspaceRow}>
+              <Text style={styles.workspaceHint} numberOfLines={1}>
+                {activeAgentLabel} · {workspaceName}
+              </Text>
+              {isConnected ? (
+                <Ionicons name="create-outline" size={12} color={colors.accent} />
+              ) : null}
+            </View>
+          ) : (
             <Text style={styles.workspaceHint} numberOfLines={1}>
-              Working in {workspaceName}
+              {isConnected ? `${activeAgentLabel} · Tap to set path` : activeAgentLabel}
+            </Text>
+          )}
+          {hasWorkspace && workspacePath ? (
+            <Text style={styles.workspacePath} numberOfLines={1}>
+              {workspacePath}
             </Text>
           ) : null}
-        </View>
+        </Pressable>
         <View style={styles.toolbarActions}>
+          <Pressable
+            style={[styles.providerBtn, !isConnected && styles.btnDisabled]}
+            onPress={openWorkspaceModal}
+            disabled={!isConnected}
+            accessibilityLabel="Set workspace path"
+          >
+            <Ionicons name="folder-outline" size={14} color={colors.icon} />
+            <Text style={styles.providerBtnText}>Path</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.providerBtn, !isConnected && styles.btnDisabled]}
+            onPress={() => {
+              dismissKeyboard();
+              setProviderModalVisible(true);
+            }}
+            disabled={!isConnected}
+          >
+            <Ionicons name="people-outline" size={14} color={colors.icon} />
+            <Text style={styles.providerBtnText}>Agent</Text>
+          </Pressable>
           <Pressable
             style={[styles.actionBtn, chat.isRunning && styles.btnDisabled]}
             onPress={() => {
-            dismissKeyboard();
-            chat.newChat();
-          }}
+              dismissKeyboard();
+              chat.newChat();
+            }}
             disabled={chat.isRunning}
           >
             <Text style={styles.actionBtnText}>New</Text>
@@ -244,6 +339,16 @@ export default function AgentScreen({
           </Pressable>
         </View>
       </View>
+
+      {chat.runningOnPc ? (
+        <View style={styles.pcRunningBanner}>
+          <Text style={styles.pcRunningText}>
+            {isConnected
+              ? "Running on your PC — you can leave this screen"
+              : "Still running on your PC — reconnect to see updates"}
+          </Text>
+        </View>
+      ) : null}
 
       {chat.sessions.length > 0 ? (
         <ScrollView
@@ -277,11 +382,14 @@ export default function AgentScreen({
         <Text style={styles.hint}>Connect to your PC to use the agent.</Text>
       ) : !hasWorkspace ? (
         <Text style={styles.hint}>
-          Open a project folder first, then use Agent to work on that project.
+          Tap Path or the title above to enter a folder path on your PC.
         </Text>
       ) : null}
 
-      <CookingBanner visible={isConnected && chat.isRunning} subtitle={cookingSubtitle} />
+      <CookingBanner
+        visible={(isConnected && chat.isRunning) || chat.runningOnPc}
+        subtitle={cookingSubtitle}
+      />
 
       <FlatList
         ref={listRef}
@@ -303,7 +411,9 @@ export default function AgentScreen({
             </Text>
           )
         }
-        renderItem={({ item }) => <MessageBubble item={item} />}
+        renderItem={({ item }) => (
+          <MessageBubble item={item} styles={styles} colors={colors} />
+        )}
       />
 
       <View style={[styles.inputRow, { marginBottom: tabBarInset }]}>
@@ -316,7 +426,7 @@ export default function AgentScreen({
           disabled={!isConnected || chat.isRunning || !hasWorkspace}
           accessibilityLabel="Attach file"
         >
-          <Ionicons name="attach" size={22} color="#c9d1d9" />
+          <Ionicons name="attach" size={22} color={colors.icon} />
         </Pressable>
         <View style={styles.inputColumn}>
           {chat.attachments.length > 0 ? (
@@ -335,7 +445,7 @@ export default function AgentScreen({
                     />
                   ) : (
                     <View style={styles.pendingAttachmentIcon}>
-                      <Ionicons name="document-outline" size={14} color="#58a6ff" />
+                      <Ionicons name="document-outline" size={14} color={colors.iconAccent} />
                     </View>
                   )}
                   <Text style={styles.pendingAttachmentName} numberOfLines={1}>
@@ -346,7 +456,7 @@ export default function AgentScreen({
                     onPress={() => chat.removeAttachment(attachment.id)}
                     hitSlop={8}
                   >
-                    <Ionicons name="close-circle" size={18} color="#8b949e" />
+                    <Ionicons name="close-circle" size={18} color={colors.iconMuted} />
                   </Pressable>
                 </View>
               ))}
@@ -357,11 +467,11 @@ export default function AgentScreen({
             value={chat.input}
             onChangeText={chat.setInput}
             placeholder="Ask the agent..."
-            placeholderTextColor="#484f58"
+            placeholderTextColor={colors.placeholder}
             multiline
             editable={isConnected && !chat.isRunning && hasWorkspace}
             contextMenuHidden={false}
-            selectionColor="#58a6ff"
+            selectionColor={colors.accent}
             selectTextOnFocus={false}
           />
         </View>
@@ -379,339 +489,408 @@ export default function AgentScreen({
           </Pressable>
         )}
       </View>
+
+      <AgentProviderModal
+        visible={providerModalVisible}
+        onClose={() => setProviderModalVisible(false)}
+        isConnected={isConnected}
+        onError={onError}
+        onActiveProviderChange={setActiveAgentLabel}
+      />
+
+      <AgentTryAgainModal
+        visible={!!chat.tryAgainPrompt}
+        title={chat.tryAgainPrompt?.title ?? "Try again"}
+        message={chat.tryAgainPrompt?.message ?? ""}
+        onTryAgain={() => void chat.tryAgain()}
+        onDismiss={chat.dismissTryAgain}
+      />
+
+      <AgentWorkspaceModal
+        visible={workspaceModalVisible}
+        currentPath={workspacePath}
+        isConnected={isConnected}
+        onClose={() => setWorkspaceModalVisible(false)}
+        onApplied={onWorkspaceChange}
+        onError={onError}
+      />
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  toolbar: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  toolbarActions: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  title: {
-    color: "#c9d1d9",
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  titleBlock: {
-    flex: 1,
-    marginRight: 8,
-  },
-  workspaceHint: {
-    color: "#58a6ff",
-    fontSize: 12,
-    marginTop: 2,
-  },
-  actionBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: "#1f6feb",
-    borderWidth: 1,
-    borderColor: "#388bfd",
-  },
-  actionBtnText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  clearBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: "#21262d",
-    borderWidth: 1,
-    borderColor: "#30363d",
-  },
-  clearBtnText: {
-    color: "#c9d1d9",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  sessionScroll: {
-    maxHeight: 44,
-    marginBottom: 8,
-  },
-  sessionList: {
-    gap: 8,
-    paddingRight: 8,
-  },
-  sessionChip: {
-    maxWidth: 180,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: "#161b22",
-    borderWidth: 1,
-    borderColor: "#30363d",
-  },
-  sessionChipActive: {
-    backgroundColor: "#1f6feb",
-    borderColor: "#388bfd",
-  },
-  sessionChipText: {
-    color: "#8b949e",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  sessionChipTextActive: {
-    color: "#fff",
-  },
-  hint: {
-    color: "#8b949e",
-    fontSize: 13,
-    marginBottom: 8,
-  },
-  list: {
-    flex: 1,
-  },
-  listContent: {
-    paddingBottom: 12,
-    gap: 10,
-  },
-  empty: {
-    color: "#8b949e",
-    textAlign: "center",
-    marginTop: 24,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  messageBlock: {
-    gap: 4,
-  },
-  senderLabel: {
-    color: "#8b949e",
-    fontSize: 11,
-    fontWeight: "700",
-    marginLeft: 4,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
-  senderLabelYou: {
-    alignSelf: "flex-end",
-    marginRight: 4,
-    marginLeft: 0,
-    color: "#58a6ff",
-  },
-  senderLabelError: {
-    color: "#f85149",
-  },
-  bubble: {
-    borderRadius: 12,
-    padding: 12,
-    maxWidth: "92%",
-  },
-  userBubble: {
-    alignSelf: "flex-end",
-    backgroundColor: "#1f6feb",
-  },
-  userText: {
-    color: "#fff",
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  assistantBubble: {
-    alignSelf: "flex-start",
-    backgroundColor: "#161b22",
-    borderWidth: 1,
-    borderColor: "#30363d",
-  },
-  assistantText: {
-    color: "#c9d1d9",
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  errorBubble: {
-    alignSelf: "stretch",
-    backgroundColor: "#3d1214",
-    borderWidth: 1,
-    borderColor: "#f85149",
-  },
-  errorText: {
-    color: "#f85149",
-    fontSize: 13,
-  },
-  toolCard: {
-    backgroundColor: "#0d1117",
-    borderWidth: 1,
-    borderColor: "#30363d",
-    borderRadius: 10,
-    padding: 10,
-    alignSelf: "stretch",
-  },
-  toolCardError: {
-    borderColor: "#f85149",
-  },
-  toolHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 6,
-  },
-  toolName: {
-    color: "#58a6ff",
-    fontWeight: "700",
-    fontSize: 13,
-  },
-  toolStatus: {
-    color: "#8b949e",
-    fontSize: 12,
-  },
-  toolArgs: {
-    color: "#8b949e",
-    fontSize: 11,
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    marginBottom: 6,
-  },
-  toolResult: {
-    color: "#c9d1d9",
-    fontSize: 12,
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    lineHeight: 18,
-  },
-  inputRow: {
-    flexDirection: "row",
-    gap: 8,
-    alignItems: "flex-end",
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: "#21262d",
-  },
-  attachBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#161b22",
-    borderWidth: 1,
-    borderColor: "#30363d",
-  },
-  inputColumn: {
-    flex: 1,
-    gap: 8,
-  },
-  pendingAttachmentScroll: {
-    maxHeight: 72,
-  },
-  pendingAttachmentList: {
-    gap: 8,
-    paddingRight: 4,
-  },
-  pendingAttachmentChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    maxWidth: 180,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 10,
-    backgroundColor: "#161b22",
-    borderWidth: 1,
-    borderColor: "#30363d",
-  },
-  pendingAttachmentThumb: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-  },
-  pendingAttachmentIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#0d1117",
-  },
-  pendingAttachmentName: {
-    flexShrink: 1,
-    color: "#c9d1d9",
-    fontSize: 12,
-    maxWidth: 96,
-  },
-  pendingAttachmentRemove: {
-    marginLeft: 2,
-  },
-  attachmentRow: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  attachmentChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: "rgba(255,255,255,0.08)",
-  },
-  attachmentThumb: {
-    width: 44,
-    height: 44,
-    borderRadius: 8,
-  },
-  attachmentIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(1,4,9,0.25)",
-  },
-  attachmentMeta: {
-    flex: 1,
-    minWidth: 0,
-  },
-  attachmentName: {
-    color: "#fff",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  attachmentKind: {
-    color: "rgba(255,255,255,0.72)",
-    fontSize: 11,
-    marginTop: 2,
-  },
-  input: {
-    minHeight: 44,
-    maxHeight: 120,
-    backgroundColor: "#161b22",
-    borderWidth: 1,
-    borderColor: "#30363d",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: "#c9d1d9",
-    fontSize: 14,
-  },
-  sendBtn: {
-    backgroundColor: "#238636",
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  sendBtnText: {
-    color: "#fff",
-    fontWeight: "700",
-  },
-  stopBtn: {
-    backgroundColor: "#da3633",
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  stopBtnText: {
-    color: "#fff",
-    fontWeight: "700",
-  },
-  btnDisabled: {
-    opacity: 0.5,
-  },
-});
+function createAgentStyles(colors: ThemeColors, isDark: boolean) {
+  return {
+    container: {
+      flex: 1,
+    },
+    toolbar: {
+      flexDirection: "row" as const,
+      justifyContent: "space-between" as const,
+      alignItems: "center" as const,
+      marginBottom: 8,
+    },
+    pcRunningBanner: {
+      backgroundColor: isDark ? "#132033" : "#ddf4ff",
+      borderWidth: 1,
+      borderColor: isDark ? "#388bfd66" : "#54aeff66",
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      marginBottom: 8,
+    },
+    pcRunningText: {
+      color: isDark ? "#79c0ff" : "#0550ae",
+      fontSize: 12,
+      fontWeight: "600" as const,
+    },
+    toolbarActions: {
+      flexDirection: "row" as const,
+      gap: 8,
+    },
+    providerBtn: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 8,
+      backgroundColor: colors.buttonSecondary,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    providerBtnText: {
+      color: colors.icon,
+      fontSize: 12,
+      fontWeight: "600" as const,
+    },
+    title: {
+      color: colors.textSecondary,
+      fontWeight: "600" as const,
+      fontSize: 14,
+    },
+    titleBlock: {
+      flex: 1,
+      marginRight: 8,
+    },
+    workspaceHint: {
+      color: colors.accent,
+      fontSize: 12,
+      marginTop: 2,
+      flexShrink: 1,
+    },
+    workspaceRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 4,
+      marginTop: 2,
+    },
+    workspacePath: {
+      color: colors.textMuted,
+      fontSize: 11,
+      marginTop: 2,
+    },
+    actionBtn: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 8,
+      backgroundColor: colors.buttonPrimary,
+      borderWidth: 1,
+      borderColor: colors.accentBorder,
+    },
+    actionBtnText: {
+      color: colors.onPrimary,
+      fontSize: 12,
+      fontWeight: "600" as const,
+    },
+    clearBtn: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 8,
+      backgroundColor: colors.buttonSecondary,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    clearBtnText: {
+      color: colors.icon,
+      fontSize: 12,
+      fontWeight: "600" as const,
+    },
+    sessionScroll: {
+      maxHeight: 44,
+      marginBottom: 8,
+    },
+    sessionList: {
+      gap: 8,
+      paddingRight: 8,
+    },
+    sessionChip: {
+      maxWidth: 180,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    sessionChipActive: {
+      backgroundColor: colors.buttonPrimary,
+      borderColor: colors.accentBorder,
+    },
+    sessionChipText: {
+      color: colors.textMuted,
+      fontSize: 12,
+      fontWeight: "600" as const,
+    },
+    sessionChipTextActive: {
+      color: colors.onPrimary,
+    },
+    hint: {
+      color: colors.textMuted,
+      fontSize: 13,
+      marginBottom: 8,
+    },
+    list: {
+      flex: 1,
+    },
+    listContent: {
+      paddingBottom: 12,
+      gap: 10,
+    },
+    empty: {
+      color: colors.textMuted,
+      textAlign: "center" as const,
+      marginTop: 24,
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    messageBlock: {
+      gap: 4,
+    },
+    senderLabel: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontWeight: "700" as const,
+      marginLeft: 4,
+      textTransform: "uppercase" as const,
+      letterSpacing: 0.6,
+    },
+    senderLabelYou: {
+      alignSelf: "flex-end" as const,
+      marginRight: 4,
+      marginLeft: 0,
+      color: colors.accent,
+    },
+    senderLabelError: {
+      color: colors.error,
+    },
+    bubble: {
+      borderRadius: 12,
+      padding: 12,
+      maxWidth: "92%" as const,
+    },
+    userBubble: {
+      alignSelf: "flex-end" as const,
+      backgroundColor: colors.userBubble,
+    },
+    userText: {
+      color: colors.onPrimary,
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    assistantBubble: {
+      alignSelf: "flex-start" as const,
+      backgroundColor: colors.agentBubble,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    assistantText: {
+      color: colors.textSecondary,
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    errorBubble: {
+      alignSelf: "stretch" as const,
+      backgroundColor: colors.errorBannerBg,
+      borderWidth: 1,
+      borderColor: colors.error,
+    },
+    errorText: {
+      color: colors.error,
+      fontSize: 13,
+    },
+    toolCard: {
+      backgroundColor: colors.toolCard,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      padding: 10,
+      alignSelf: "stretch" as const,
+    },
+    toolCardError: {
+      borderColor: colors.toolCardError,
+    },
+    toolHeader: {
+      flexDirection: "row" as const,
+      justifyContent: "space-between" as const,
+      marginBottom: 6,
+    },
+    toolName: {
+      color: colors.accent,
+      fontWeight: "700" as const,
+      fontSize: 13,
+    },
+    toolStatus: {
+      color: colors.textMuted,
+      fontSize: 12,
+    },
+    toolArgs: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+      marginBottom: 6,
+    },
+    toolResult: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+      lineHeight: 18,
+    },
+    inputRow: {
+      flexDirection: "row" as const,
+      gap: 8,
+      alignItems: "flex-end" as const,
+      paddingTop: 8,
+      borderTopWidth: 1,
+      borderTopColor: colors.surfaceMuted,
+    },
+    attachBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 10,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      backgroundColor: colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    inputColumn: {
+      flex: 1,
+      gap: 8,
+    },
+    pendingAttachmentScroll: {
+      maxHeight: 72,
+    },
+    pendingAttachmentList: {
+      gap: 8,
+      paddingRight: 4,
+    },
+    pendingAttachmentChip: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 6,
+      maxWidth: 180,
+      paddingHorizontal: 8,
+      paddingVertical: 6,
+      borderRadius: 10,
+      backgroundColor: colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    pendingAttachmentThumb: {
+      width: 28,
+      height: 28,
+      borderRadius: 6,
+    },
+    pendingAttachmentIcon: {
+      width: 28,
+      height: 28,
+      borderRadius: 6,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      backgroundColor: colors.surface,
+    },
+    pendingAttachmentName: {
+      flexShrink: 1,
+      color: colors.textSecondary,
+      fontSize: 12,
+      maxWidth: 96,
+    },
+    pendingAttachmentRemove: {
+      marginLeft: 2,
+    },
+    attachmentRow: {
+      gap: 8,
+      marginBottom: 8,
+    },
+    attachmentChip: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 8,
+      padding: 8,
+      borderRadius: 8,
+      backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+    },
+    attachmentThumb: {
+      width: 44,
+      height: 44,
+      borderRadius: 8,
+    },
+    attachmentIconWrap: {
+      width: 44,
+      height: 44,
+      borderRadius: 8,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      backgroundColor: isDark ? "rgba(0,0,0,0.25)" : "rgba(0,0,0,0.08)",
+    },
+    attachmentMeta: {
+      flex: 1,
+      minWidth: 0,
+    },
+    attachmentName: {
+      color: colors.onPrimary,
+      fontSize: 13,
+      fontWeight: "600" as const,
+    },
+    attachmentKind: {
+      color: isDark ? "rgba(255,255,255,0.72)" : "rgba(255,255,255,0.85)",
+      fontSize: 11,
+      marginTop: 2,
+    },
+    input: {
+      minHeight: 44,
+      maxHeight: 120,
+      backgroundColor: colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      color: colors.textSecondary,
+      fontSize: 14,
+    },
+    sendBtn: {
+      backgroundColor: colors.buttonSuccess,
+      borderRadius: 10,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+    },
+    sendBtnText: {
+      color: colors.onPrimary,
+      fontWeight: "700" as const,
+    },
+    stopBtn: {
+      backgroundColor: colors.buttonDanger,
+      borderRadius: 10,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+    },
+    stopBtnText: {
+      color: colors.onPrimary,
+      fontWeight: "700" as const,
+    },
+    btnDisabled: {
+      opacity: 0.5,
+    },
+  };
+}

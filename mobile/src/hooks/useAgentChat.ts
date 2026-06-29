@@ -103,8 +103,14 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<PendingAgentAttachment[]>([]);
   const [isRunning, setIsRunning] = useState(false);
+  const [runningOnPc, setRunningOnPc] = useState(false);
+  const [tryAgainPrompt, setTryAgainPrompt] = useState<{
+    title: string;
+    message: string;
+  } | null>(null);
   const assistantIdRef = useRef<string | null>(null);
   const sessionsLoadedRef = useRef(false);
+  const wasRunningOnDisconnectRef = useRef(false);
 
   const persistSessions = useCallback(async (nextSessions: AgentSessionSummary[]) => {
     setSessions(nextSessions);
@@ -180,19 +186,96 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
     };
   }, []);
 
+  const syncAfterReconnect = useCallback(async () => {
+    const sessionId = sessionIdRef.current;
+
+    try {
+      const status = await titusClient.getAgentStatus(sessionId);
+      const current = status.sessions.find((item) => item.sessionId === sessionId);
+      await loadHistory(sessionId);
+
+      if (current?.running) {
+        setIsRunning(true);
+        setRunningOnPc(true);
+        wasRunningOnDisconnectRef.current = false;
+        return;
+      }
+
+      setIsRunning(false);
+      setRunningOnPc(false);
+
+      if (current?.canRetry) {
+        setTryAgainPrompt({
+          title: wasRunningOnDisconnectRef.current
+            ? "Connection lost"
+            : "Task incomplete",
+          message:
+            current.lastError ??
+            "Something went wrong. You can retry and pick up where you left off.",
+        });
+      }
+
+      wasRunningOnDisconnectRef.current = false;
+    } catch {
+      if (wasRunningOnDisconnectRef.current) {
+        setTryAgainPrompt({
+          title: "Connection lost",
+          message:
+            "Your phone disconnected. Reconnect to check status, or try again when back online.",
+        });
+      }
+      wasRunningOnDisconnectRef.current = false;
+    }
+  }, [loadHistory]);
+
   useEffect(() => {
     if (!isConnected || !sessionsLoadedRef.current) {
-      if (!isConnected) {
-        setIsRunning(false);
+      if (!isConnected && (isRunning || runningOnPc)) {
+        wasRunningOnDisconnectRef.current = true;
       }
       return;
     }
 
     void (async () => {
       await refreshSessions();
-      await loadHistory();
+      await syncAfterReconnect();
     })();
-  }, [isConnected, loadHistory, refreshSessions]);
+  }, [isConnected, refreshSessions, syncAfterReconnect]);
+
+  useEffect(() => {
+    if (!isConnected || !runningOnPc || !isRunning) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      void titusClient
+        .getAgentStatus(sessionIdRef.current)
+        .then((status) => {
+          const current = status.sessions.find(
+            (item) => item.sessionId === sessionIdRef.current
+          );
+          if (!current?.running) {
+            setIsRunning(false);
+            setRunningOnPc(false);
+            void loadHistory();
+            void refreshSessions();
+            if (current?.canRetry) {
+              setTryAgainPrompt({
+                title: "Task incomplete",
+                message:
+                  current.lastError ??
+                  "The agent stopped before finishing. Try again to resume.",
+              });
+            }
+          }
+        })
+        .catch(() => {
+          // ignore polling errors
+        });
+    }, 4000);
+
+    return () => clearInterval(timer);
+  }, [isConnected, isRunning, loadHistory, refreshSessions, runningOnPc]);
 
   const handleAgentMessage = useCallback(
     (message: ServerMessage) => {
@@ -202,6 +285,14 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
       }
 
       switch (message.type) {
+        case "agent_ack":
+          if (message.sessionId === sessionId) {
+            setRunningOnPc(true);
+            setIsRunning(true);
+            onError?.(null);
+          }
+          break;
+
         case "agent_started":
           setIsRunning(true);
           assistantIdRef.current = null;
@@ -277,7 +368,9 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
 
         case "agent_done":
           setIsRunning(false);
+          setRunningOnPc(false);
           assistantIdRef.current = null;
+          setTryAgainPrompt(null);
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
             () => {}
           );
@@ -291,8 +384,13 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
 
         case "agent_error":
           setIsRunning(false);
+          setRunningOnPc(false);
           assistantIdRef.current = null;
           onError?.(message.message);
+          setTryAgainPrompt({
+            title: "Agent failed",
+            message: message.message,
+          });
           setMessages((prev) => [
             ...prev.map((item) =>
               item.kind === "assistant" ? { ...item, streaming: false } : item
@@ -415,6 +513,8 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
     try {
       titusClient.sendAgentMessage(sessionId, text, wireAttachments);
       setIsRunning(true);
+      setRunningOnPc(false);
+      setTryAgainPrompt(null);
     } catch (err) {
       setMessages((prev) => [
         ...prev,
@@ -425,8 +525,38 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
         },
       ]);
       setIsRunning(false);
+      setTryAgainPrompt({
+        title: "Could not send",
+        message: err instanceof Error ? err.message : "Failed to send",
+      });
     }
   }, [attachments, input, isConnected, isRunning, messages, persistSessions, sessions]);
+
+  const tryAgain = useCallback(async () => {
+    if (!isConnected) {
+      onError?.("Connect to your PC to try again");
+      return;
+    }
+
+    setTryAgainPrompt(null);
+    onError?.(null);
+
+    try {
+      await titusClient.retryAgent(sessionIdRef.current);
+      setIsRunning(true);
+      setRunningOnPc(true);
+    } catch (err) {
+      onError?.(errorMessage(err, "Failed to retry agent"));
+      setTryAgainPrompt({
+        title: "Retry failed",
+        message: errorMessage(err, "Failed to retry agent"),
+      });
+    }
+  }, [isConnected, onError]);
+
+  const dismissTryAgain = useCallback(() => {
+    setTryAgainPrompt(null);
+  }, []);
 
   const cancel = useCallback(() => {
     try {
@@ -435,6 +565,7 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
       onError?.(errorMessage(err, "Failed to cancel agent"));
     }
     setIsRunning(false);
+    setRunningOnPc(false);
   }, [onError]);
 
   const clearChat = useCallback(async () => {
@@ -470,7 +601,11 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
     pickAttachment,
     removeAttachment,
     isRunning,
+    runningOnPc,
+    tryAgainPrompt,
     sendMessage,
+    tryAgain,
+    dismissTryAgain,
     cancel,
     clearChat,
     newChat,

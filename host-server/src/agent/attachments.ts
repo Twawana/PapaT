@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { AgentAttachmentPayload, AgentAttachmentRef } from "../protocol";
+import { AgentAttachmentPayload, AgentAttachmentRef, AgentChatMessage } from "../protocol";
 
 export const MAX_ATTACHMENTS = 5;
 export const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
@@ -247,4 +247,33 @@ export function readImageDataUri(filePath: string, mimeType: string): string | n
   } catch {
     return null;
   }
+}
+
+export function preparedFromStoredUserMessage(
+  message: AgentChatMessage
+): PreparedAgentUserMessage {
+  const refs = message.attachments ?? [];
+  if (refs.length === 0) {
+    const text = message.content.trim();
+    return {
+      displayText: text,
+      cursorPrompt: text,
+      attachmentRefs: [],
+      openAiImages: [],
+    };
+  }
+
+  const processed: ProcessedAttachment[] = refs.map((ref) => {
+    let textContent: string | undefined;
+    if (ref.kind === "text" && fs.existsSync(ref.path)) {
+      try {
+        textContent = fs.readFileSync(ref.path, "utf8").slice(0, MAX_TEXT_INLINE_CHARS);
+      } catch {
+        // ignore
+      }
+    }
+    return { ...ref, textContent };
+  });
+
+  return prepareAgentUserMessage(message.content.trim(), processed);
 }

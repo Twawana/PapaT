@@ -29,9 +29,9 @@ export function findCommandOnPath(candidates: string[]): string | null {
         })
           .split(/\r?\n/)
           .map((line) => line.trim())
-          .find(Boolean);
-        if (found && fs.existsSync(found)) {
-          return found;
+          .filter((line) => line && fs.existsSync(line));
+        if (found.length) {
+          return pickBestWindowsCliMatch(found);
         }
       } catch {
         // not on PATH
@@ -56,6 +56,58 @@ export function findCommandOnPath(candidates: string[]): string | null {
   return null;
 }
 
+function pickBestWindowsCliMatch(candidates: string[]): string {
+  const rank = (command: string): number => {
+    if (/\.cmd$/i.test(command)) return 0;
+    if (/\.exe$/i.test(command)) return 1;
+    if (/\.bat$/i.test(command)) return 2;
+    if (!/\.[^\\/]+$/i.test(command)) return 3;
+    if (/\.ps1$/i.test(command)) return 4;
+    return 5;
+  };
+
+  return [...candidates].sort((a, b) => rank(a) - rank(b))[0];
+}
+
+/** On Windows, npm/global CLIs are often extensionless shims; run the .cmd via cmd.exe. */
+export function resolveWindowsSpawnTarget(command: string): {
+  executable: string;
+  argsPrefix: string[];
+} {
+  if (process.platform !== "win32") {
+    return { executable: command, argsPrefix: [] };
+  }
+
+  const comspec = process.env.ComSpec || "cmd.exe";
+
+  if (/\.(cmd|bat)$/i.test(command)) {
+    return {
+      executable: comspec,
+      argsPrefix: ["/d", "/s", "/c", command],
+    };
+  }
+
+  if (/\.ps1$/i.test(command)) {
+    const systemRoot = process.env.SystemRoot || "C:\\Windows";
+    return {
+      executable: path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
+      argsPrefix: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", command],
+    };
+  }
+
+  if (!/\.(exe|com|cmd|bat|ps1)$/i.test(command)) {
+    const cmdShim = `${command}.cmd`;
+    if (fs.existsSync(cmdShim)) {
+      return {
+        executable: comspec,
+        argsPrefix: ["/d", "/s", "/c", cmdShim],
+      };
+    }
+  }
+
+  return { executable: command, argsPrefix: [] };
+}
+
 export function runCli(
   command: string,
   args: string[],
@@ -65,24 +117,26 @@ export function runCli(
     let stdout = "";
     let stderr = "";
     let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
     const finish = (result: { stdout: string; stderr: string; code: number | null }) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
       resolve(result);
     };
 
     const fail = (err: Error) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
       reject(err);
     };
 
     let child: ChildProcess;
     try {
-      child = spawn(command, args, {
+      const { executable, argsPrefix } = resolveWindowsSpawnTarget(command);
+      child = spawn(executable, [...argsPrefix, ...args], {
         cwd: options.cwd,
         env: process.env,
         shell: false,
@@ -95,7 +149,7 @@ export function runCli(
 
     options.registerChild?.(child);
 
-    const timer = setTimeout(() => {
+    timer = setTimeout(() => {
       try {
         child.kill();
       } catch {
@@ -151,8 +205,46 @@ export function looksUnauthenticated(output: string, code: number | null): boole
     lower.includes("please login") ||
     lower.includes("run login") ||
     lower.includes("authentication required") ||
-    lower.includes("sign in")
+    lower.includes('"loggedin": false') ||
+    lower.includes('"loggedin":false') ||
+    (lower.includes("sign in") && !lower.includes('"loggedin": true'))
   );
+}
+
+export function parseClaudeAuthStatus(
+  output: string,
+  code: number | null = 0
+): {
+  authenticated: boolean;
+  message: string;
+} {
+  const trimmed = output.trim();
+  try {
+    const parsed = JSON.parse(trimmed) as {
+      loggedIn?: boolean;
+      email?: string;
+      subscriptionType?: string;
+    };
+
+    if (parsed.loggedIn === true) {
+      const parts = [parsed.email, parsed.subscriptionType].filter(Boolean);
+      return {
+        authenticated: true,
+        message: parts.length ? parts.join(" · ") : "Signed in to Claude",
+      };
+    }
+
+    return {
+      authenticated: false,
+      message: "Not signed in — run `claude login` on your PC",
+    };
+  } catch {
+    const authenticated = !looksUnauthenticated(trimmed, code);
+    return {
+      authenticated,
+      message: trimmed || "Could not read Claude auth status",
+    };
+  }
 }
 
 export async function runStreamingTextAgent(options: {

@@ -1,5 +1,7 @@
 import React from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
+import { useTheme } from "../context/ThemeContext";
+import { useThemedStyles } from "../hooks/useThemedStyles";
 
 interface Props {
   output: string;
@@ -8,6 +10,50 @@ interface Props {
 }
 
 export function TerminalOutput({ output, isRunning, exitCode }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles((c) => ({
+    container: {
+      flex: 1,
+      backgroundColor: c.background,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: c.border,
+      overflow: "hidden",
+    },
+    header: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: c.border,
+      backgroundColor: c.surface,
+    },
+    headerTitle: {
+      color: c.textSecondary,
+      fontWeight: "600",
+      fontSize: 13,
+    },
+    status: {
+      fontSize: 12,
+      fontWeight: "500",
+    },
+    scroll: {
+      flex: 1,
+    },
+    scrollContent: {
+      padding: 12,
+      flexGrow: 1,
+    },
+    output: {
+      fontFamily: "monospace",
+      fontSize: 13,
+      color: c.textSecondary,
+      lineHeight: 20,
+    },
+  }));
+
   const statusLabel = isRunning
     ? "Running..."
     : exitCode !== null
@@ -15,12 +61,12 @@ export function TerminalOutput({ output, isRunning, exitCode }: Props) {
       : "Ready";
 
   const statusColor = isRunning
-    ? "#3fb950"
+    ? colors.success
     : exitCode === 0
-      ? "#58a6ff"
+      ? colors.link
       : exitCode !== null
-        ? "#f85149"
-        : "#8b949e";
+        ? colors.error
+        : colors.textMuted;
 
   return (
     <View style={styles.container}>
@@ -41,46 +87,3 @@ export function TerminalOutput({ output, isRunning, exitCode }: Props) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0d1117",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#30363d",
-    overflow: "hidden",
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#30363d",
-    backgroundColor: "#161b22",
-  },
-  headerTitle: {
-    color: "#c9d1d9",
-    fontWeight: "600",
-    fontSize: 13,
-  },
-  status: {
-    fontSize: 12,
-    fontWeight: "500",
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 12,
-    flexGrow: 1,
-  },
-  output: {
-    fontFamily: "monospace",
-    fontSize: 13,
-    color: "#c9d1d9",
-    lineHeight: 20,
-  },
-});

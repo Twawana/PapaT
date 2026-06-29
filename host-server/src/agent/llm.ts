@@ -1,4 +1,5 @@
 import { config } from "../config";
+import { getOpenAiApiKey } from "./agent-credentials";
 import { TOOL_DEFINITIONS } from "./tools";
 
 export interface LlmToolCall {
@@ -34,9 +35,10 @@ export async function callLlm(
   messages: OpenAiMessage[],
   signal?: AbortSignal
 ): Promise<LlmResponse> {
-  if (!config.llmApiKey) {
+  const apiKey = getOpenAiApiKey();
+  if (!apiKey) {
     throw new Error(
-      "No API key configured. Set OPENAI_API_KEY on the host server."
+      "No API key configured. Set an OpenAI API key from the Agent tab or OPENAI_API_KEY on the host."
     );
   }
 
@@ -47,7 +49,7 @@ export async function callLlm(
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${config.llmApiKey}`,
+      Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({

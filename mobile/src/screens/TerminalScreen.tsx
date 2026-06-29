@@ -3,15 +3,16 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
 import { titusClient } from "../services/websocket";
 import { ServerMessage, ShellKind } from "../types/protocol";
+import { useTheme } from "../context/ThemeContext";
 import { dismissKeyboard, keyboardPersistTaps } from "../utils/keyboard";
 import { useTabBarInset } from "../hooks/useTabBarInset";
+import { useThemedStyles } from "../hooks/useThemedStyles";
 
 interface Props {
   isConnected: boolean;
@@ -39,6 +40,152 @@ function shellHint(shell: ShellKind): string {
 }
 
 export default function TerminalScreen({ isConnected, onError }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles((c) => ({
+    flex: {
+      flex: 1,
+    },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 8,
+      paddingHorizontal: 4,
+    },
+    shellToggle: {
+      flexDirection: "row",
+      gap: 6,
+    },
+    shellChip: {
+      backgroundColor: c.buttonSecondary,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    shellChipActive: {
+      borderColor: c.buttonPrimary,
+      backgroundColor: c.surface,
+    },
+    shellChipText: {
+      color: c.textMuted,
+      fontSize: 11,
+      fontWeight: "600",
+    },
+    shellChipTextActive: {
+      color: c.link,
+    },
+    shellBadge: {
+      color: c.textMuted,
+      fontSize: 11,
+      fontWeight: "600",
+      backgroundColor: c.buttonSecondary,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 6,
+    },
+    headerTitle: {
+      color: c.textSecondary,
+      fontWeight: "700",
+      fontSize: 14,
+    },
+    cwd: {
+      flex: 1,
+      color: c.textMuted,
+      fontSize: 11,
+      fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    },
+    status: {
+      fontSize: 12,
+      fontWeight: "600",
+    },
+    output: {
+      flex: 1,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 8,
+      marginBottom: 10,
+    },
+    outputScroll: {
+      flex: 1,
+    },
+    outputContent: {
+      padding: 12,
+      flexGrow: 1,
+    },
+    line: {
+      fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+      fontSize: 13,
+      lineHeight: 20,
+    },
+    inputRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: c.surfaceElevated,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      marginBottom: 10,
+    },
+    prompt: {
+      color: c.success,
+      fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+      fontSize: 16,
+      fontWeight: "700",
+      marginRight: 8,
+    },
+    input: {
+      flex: 1,
+      color: c.textSecondary,
+      fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+      fontSize: 14,
+      paddingVertical: 10,
+    },
+    actions: {
+      flexDirection: "row",
+      gap: 8,
+      justifyContent: "flex-end",
+    },
+    historyBtn: {
+      backgroundColor: c.buttonSecondary,
+      borderRadius: 8,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    historyText: {
+      color: c.textSecondary,
+      fontWeight: "600",
+      fontSize: 13,
+    },
+    runBtn: {
+      flex: 1,
+      backgroundColor: c.buttonPrimary,
+      borderRadius: 8,
+      paddingVertical: 10,
+      alignItems: "center",
+    },
+    cancelBtn: {
+      flex: 1,
+      backgroundColor: c.error,
+      borderRadius: 8,
+      paddingVertical: 10,
+      alignItems: "center",
+    },
+    runText: {
+      color: c.onPrimary,
+      fontWeight: "700",
+      fontSize: 14,
+    },
+    btnDisabled: {
+      opacity: 0.5,
+    },
+  }));
   const [command, setCommand] = useState("");
   const [cwd, setCwd] = useState("");
   const [shell, setShell] = useState<ShellKind>("cmd");
@@ -204,13 +351,13 @@ export default function TerminalScreen({ isConnected, onError }: Props) {
   const lineColor = (kind: TerminalLine["kind"]) => {
     switch (kind) {
       case "prompt":
-        return "#58a6ff";
+        return colors.link;
       case "stderr":
-        return "#f85149";
+        return colors.error;
       case "system":
-        return "#8b949e";
+        return colors.textMuted;
       default:
-        return "#c9d1d9";
+        return colors.textSecondary;
     }
   };
 
@@ -250,7 +397,7 @@ export default function TerminalScreen({ isConnected, onError }: Props) {
         <Text style={styles.cwd} numberOfLines={1}>
           {cwd || "Not connected"}
         </Text>
-        <Text style={[styles.status, { color: isRunning ? "#3fb950" : "#8b949e" }]}>
+        <Text style={[styles.status, { color: isRunning ? colors.success : colors.textMuted }]}>
           {isRunning ? "Running..." : "Ready"}
         </Text>
       </View>
@@ -286,7 +433,7 @@ export default function TerminalScreen({ isConnected, onError }: Props) {
               ? "Enter PowerShell command..."
               : "Enter CMD command (dir, cd, npm)..."
           }
-          placeholderTextColor="#484f58"
+          placeholderTextColor={colors.placeholder}
           autoCapitalize="none"
           autoCorrect={false}
           spellCheck={false}
@@ -328,149 +475,3 @@ export default function TerminalScreen({ isConnected, onError }: Props) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 8,
-    paddingHorizontal: 4,
-  },
-  shellToggle: {
-    flexDirection: "row",
-    gap: 6,
-  },
-  shellChip: {
-    backgroundColor: "#21262d",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: "#30363d",
-  },
-  shellChipActive: {
-    borderColor: "#1f6feb",
-    backgroundColor: "#0d1117",
-  },
-  shellChipText: {
-    color: "#8b949e",
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  shellChipTextActive: {
-    color: "#58a6ff",
-  },
-  shellBadge: {
-    color: "#8b949e",
-    fontSize: 11,
-    fontWeight: "600",
-    backgroundColor: "#21262d",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  headerTitle: {
-    color: "#c9d1d9",
-    fontWeight: "700",
-    fontSize: 14,
-  },
-  cwd: {
-    flex: 1,
-    color: "#8b949e",
-    fontSize: 11,
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-  },
-  status: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  output: {
-    flex: 1,
-    backgroundColor: "#0d1117",
-    borderWidth: 1,
-    borderColor: "#30363d",
-    borderRadius: 8,
-    marginBottom: 10,
-  },
-  outputScroll: {
-    flex: 1,
-  },
-  outputContent: {
-    padding: 12,
-    flexGrow: 1,
-  },
-  line: {
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    fontSize: 13,
-    lineHeight: 20,
-  },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#161b22",
-    borderWidth: 1,
-    borderColor: "#30363d",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    marginBottom: 10,
-  },
-  prompt: {
-    color: "#3fb950",
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    fontSize: 16,
-    fontWeight: "700",
-    marginRight: 8,
-  },
-  input: {
-    flex: 1,
-    color: "#c9d1d9",
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    fontSize: 14,
-    paddingVertical: 10,
-  },
-  actions: {
-    flexDirection: "row",
-    gap: 8,
-    justifyContent: "flex-end",
-  },
-  historyBtn: {
-    backgroundColor: "#21262d",
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: "#30363d",
-  },
-  historyText: {
-    color: "#c9d1d9",
-    fontWeight: "600",
-    fontSize: 13,
-  },
-  runBtn: {
-    flex: 1,
-    backgroundColor: "#1f6feb",
-    borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: "center",
-  },
-  cancelBtn: {
-    flex: 1,
-    backgroundColor: "#da3633",
-    borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: "center",
-  },
-  runText: {
-    color: "#ffffff",
-    fontWeight: "700",
-    fontSize: 14,
-  },
-  btnDisabled: {
-    opacity: 0.5,
-  },
-});

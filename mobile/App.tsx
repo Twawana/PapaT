@@ -7,6 +7,7 @@ import {
   registerGlobalErrorListener,
 } from "./src/services/globalErrors";
 import { EditorProvider } from "./src/context/EditorContext";
+import { ThemeProvider } from "./src/context/ThemeContext";
 import MainScreen from "./src/screens/MainScreen";
 
 export default function App() {
@@ -19,17 +20,19 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <ErrorBoundary title="Titus">
-        {globalError ? (
-          <GlobalErrorBanner
-            message={globalError}
-            onDismiss={() => setGlobalError(null)}
-          />
-        ) : null}
-        <EditorProvider>
-          <MainScreen />
-        </EditorProvider>
-      </ErrorBoundary>
+      <ThemeProvider>
+        <ErrorBoundary title="Titus">
+          {globalError ? (
+            <GlobalErrorBanner
+              message={globalError}
+              onDismiss={() => setGlobalError(null)}
+            />
+          ) : null}
+          <EditorProvider>
+            <MainScreen />
+          </EditorProvider>
+        </ErrorBoundary>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }

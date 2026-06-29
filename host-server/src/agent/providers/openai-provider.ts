@@ -1,5 +1,6 @@
 import { config } from "../../config";
-import { getSession, setSessionRunning } from "../session-store";
+import { getOpenAiApiKey, credentialHint } from "../agent-credentials";
+import { getSession, setSessionRunning, touchSessionMessages } from "../session-store";
 import { callLlm, OpenAiContentPart, OpenAiMessage } from "../llm";
 import { buildSystemPrompt, executeTool } from "../tools";
 import { readImageDataUri } from "../attachments";
@@ -104,12 +105,15 @@ async function runOpenAiTurn(ctx: AgentProviderRunContext): Promise<void> {
   setSessionRunning(sessionId, true, abortController);
 
   const session = getSession(sessionId);
-  session.messages.push({
-    role: "user",
-    content: prepared.displayText,
-    attachments: prepared.attachmentRefs.length ? prepared.attachmentRefs : undefined,
-    timestamp: Date.now(),
-  });
+  if (!ctx.skipUserMessage) {
+    session.messages.push({
+      role: "user",
+      content: prepared.displayText,
+      attachments: prepared.attachmentRefs.length ? prepared.attachmentRefs : undefined,
+      timestamp: Date.now(),
+    });
+    touchSessionMessages(sessionId);
+  }
 
   emit({ type: "agent_started", id: requestId, sessionId });
 
@@ -128,6 +132,7 @@ async function runOpenAiTurn(ctx: AgentProviderRunContext): Promise<void> {
           content,
           timestamp: Date.now(),
         });
+        touchSessionMessages(sessionId);
         emit({ type: "agent_delta", sessionId, content });
         emit({ type: "agent_done", id: requestId, sessionId });
         return;
@@ -205,16 +210,19 @@ export const openaiProvider: AgentProviderDefinition = {
   description: "OpenAI API with Titus tools",
   async probe() {
     const installed = true;
-    const authenticated = !!config.llmApiKey;
+    const apiKey = getOpenAiApiKey();
+    const authenticated = !!apiKey;
+    const hint = credentialHint("openai");
+    const baseMessage = authenticated
+      ? `Model: ${config.llmModel}`
+      : "Set an OpenAI API key on your phone or OPENAI_API_KEY on the host";
     return {
       id: "openai",
       label: "OpenAI",
       description: "OpenAI API with Titus tools",
       installed,
       authenticated,
-      statusMessage: authenticated
-        ? `Model: ${config.llmModel}`
-        : "Set OPENAI_API_KEY on the host server",
+      statusMessage: hint ? `${baseMessage} · ${hint}` : baseMessage,
     };
   },
   runTurn: runOpenAiTurn,

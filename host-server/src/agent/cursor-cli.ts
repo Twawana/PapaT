@@ -4,6 +4,11 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { config } from "../config";
+import { getCursorApiKey } from "./agent-credentials";
+import {
+  getProviderInstallPath,
+  resolveCliFromUserPath,
+} from "./agent-install-paths";
 
 export interface CursorStreamEvent {
   kind: "text" | "tool_call" | "tool_result";
@@ -28,6 +33,16 @@ function agentCandidates(): string[] {
       path.join(localBin, "cursor-agent.exe"),
       path.join(localBin, "cursor-agent.cmd")
     );
+
+    const localAppData =
+      process.env.LOCALAPPDATA || path.join(home, "AppData", "Local");
+    const cursorAgentDir = path.join(localAppData, "cursor-agent");
+    candidates.push(
+      path.join(cursorAgentDir, "agent.cmd"),
+      path.join(cursorAgentDir, "agent.exe"),
+      path.join(cursorAgentDir, "cursor-agent.cmd"),
+      path.join(cursorAgentDir, "cursor-agent.exe")
+    );
   } else {
     candidates.push(
       path.join(localBin, "agent"),
@@ -39,6 +54,21 @@ function agentCandidates(): string[] {
 }
 
 export function findAgentCommand(): string | null {
+  const custom = getProviderInstallPath("cursor");
+  if (custom) {
+    const resolved = resolveCliFromUserPath(custom, [
+      "agent",
+      "cursor-agent",
+      "agent.exe",
+      "cursor-agent.exe",
+      "agent.cmd",
+      "cursor-agent.cmd",
+    ]);
+    if (resolved) {
+      return resolved;
+    }
+  }
+
   for (const candidate of agentCandidates()) {
     if (candidate.includes(path.sep) && fs.existsSync(candidate)) {
       return candidate;
@@ -111,6 +141,18 @@ export function clearCursorAuthCache(): void {
   authCache = null;
 }
 
+export async function logoutCursorCli(signal?: AbortSignal): Promise<void> {
+  const command = findAgentCommand();
+  if (!command) {
+    return;
+  }
+
+  await runCommand(command, ["logout"], {
+    signal,
+    timeoutMs: 30_000,
+  });
+}
+
 function cacheAuthResult(ok: boolean, message: string): void {
   if (ok) {
     authCache = {
@@ -125,7 +167,7 @@ function cacheAuthResult(ok: boolean, message: string): void {
 
 function spawnEnv(apiKey?: string): NodeJS.ProcessEnv {
   const env = { ...process.env };
-  const key = apiKey || config.cursorApiKey;
+  const key = apiKey || getCursorApiKey();
   if (key) {
     env.CURSOR_API_KEY = key;
   }
@@ -305,9 +347,11 @@ export async function checkCursorAuth(
   }
 
   try {
+    const apiKey = getCursorApiKey();
     const { stdout, stderr, code } = await runCommand(command, ["status"], {
       signal,
       timeoutMs: 90_000,
+      apiKey: apiKey || undefined,
     });
 
     const output = `${stdout}\n${stderr}`.trim();

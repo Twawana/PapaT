@@ -1,7 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
-import { Keyboard, Platform, StyleSheet, View } from "react-native";
+import { Keyboard, Platform, View } from "react-native";
 import { WebView, WebViewMessageEvent } from "react-native-webview";
+import { useTheme } from "../context/ThemeContext";
 import { buildEditorHtml } from "../editor/editorHtml";
+import { useThemedStyles } from "../hooks/useThemedStyles";
+import { ThemeColors } from "../theme/colors";
 import { codemirrorMode, EditorMode } from "../utils/language";
 
 interface Props {
@@ -22,6 +25,8 @@ export const CodeEditor = React.forwardRef<CodeEditorHandle, Props>(function Cod
   { value, mode, onChange, onReady, editorKey },
   ref
 ) {
+  const { isDark } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const webRef = useRef<WebView>(null);
   const readyRef = useRef(false);
   const pendingValue = useRef<string | null>(null);
@@ -50,6 +55,7 @@ export const CodeEditor = React.forwardRef<CodeEditorHandle, Props>(function Cod
             post({ type: "setValue", value: pendingValue.current });
             pendingValue.current = null;
           }
+          post({ type: "setTheme", isDark });
           onReady?.();
           return;
         }
@@ -61,7 +67,7 @@ export const CodeEditor = React.forwardRef<CodeEditorHandle, Props>(function Cod
         // ignore malformed messages
       }
     },
-    [onChange, onReady, post]
+    [isDark, onChange, onReady, post]
   );
 
   useEffect(() => {
@@ -89,6 +95,12 @@ export const CodeEditor = React.forwardRef<CodeEditorHandle, Props>(function Cod
   }, [mode, post]);
 
   useEffect(() => {
+    if (readyRef.current) {
+      post({ type: "setTheme", isDark });
+    }
+  }, [isDark, post]);
+
+  useEffect(() => {
     const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
     const sub = Keyboard.addListener(hideEvent, () => {
       post({ type: "blur" });
@@ -97,8 +109,8 @@ export const CodeEditor = React.forwardRef<CodeEditorHandle, Props>(function Cod
   }, [post]);
 
   const html = useMemo(
-    () => buildEditorHtml(value, mode),
-    [editorKey, mode]
+    () => buildEditorHtml(value, mode, isDark),
+    [editorKey, mode, isDark]
   );
   const source = useMemo(() => ({ html }), [html]);
 
@@ -124,17 +136,19 @@ export const CodeEditor = React.forwardRef<CodeEditorHandle, Props>(function Cod
   );
 });
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0d1117",
-    borderWidth: 1,
-    borderColor: "#30363d",
-    borderRadius: 8,
-    overflow: "hidden",
-  },
-  webview: {
-    flex: 1,
-    backgroundColor: "#0d1117",
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return {
+    container: {
+      flex: 1,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 8,
+      overflow: "hidden" as const,
+    },
+    webview: {
+      flex: 1,
+      backgroundColor: colors.surface,
+    },
+  };
+}

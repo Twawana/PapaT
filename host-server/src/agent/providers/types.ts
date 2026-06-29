@@ -12,6 +12,7 @@ export interface AgentProviderStatus {
   installed: boolean;
   authenticated: boolean;
   statusMessage: string;
+  installPath?: string | null;
   isActive: boolean;
 }
 
@@ -20,6 +21,7 @@ export interface AgentProviderRunContext {
   prepared: PreparedAgentUserMessage;
   requestId: string;
   emit: AgentEmit;
+  skipUserMessage?: boolean;
 }
 
 export interface AgentProviderDefinition {

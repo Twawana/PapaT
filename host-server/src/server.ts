@@ -64,13 +64,32 @@ import { grepWorkspace, searchFiles } from "./search";
 import { initWorkspace, getWorkspaceRoot } from "./workspace-state";
 import { resolveFsPath, toClientPath } from "./path-utils";
 import {
+  bootstrapAgentSessions,
   cancelAgent,
   clearAgentSession,
   getAgentHistory,
+  getAgentStatus,
   listAgentSessions,
+  retryAgentTurn,
   runAgentTurn,
 } from "./agent/loop";
 import { validateAttachments } from "./agent/attachments";
+import {
+  logoutAgentProvider,
+  setAgentProviderCredentials,
+  setAgentProviderInstallPath,
+} from "./agent/agent-logout";
+import {
+  cancelAgentProviderLogin,
+  setAgentLoginCompleteHandler,
+  startAgentProviderLogin,
+} from "./agent/agent-login";
+import {
+  getActiveAgentProviderId,
+  refreshAgentProviders,
+  selectAgentProvider,
+} from "./agent/providers/registry";
+import { AgentProviderId } from "./agent/providers/types";
 import {
   getVscodeStatus,
   initVscodeBridge,
@@ -87,6 +106,8 @@ const SERVER_ID = randomUUID();
 
 const UNAUTHENTICATED_TYPES = new Set(["ping", "auth", "pair"]);
 const activeShellRuns = new WeakMap<WebSocket, Map<string, ActiveExecution>>();
+let broadcastMobileClients: ((message: ServerMessage, except?: WebSocket) => void) | null =
+  null;
 
 function buildConnectedMessage(deviceName?: string): Extract<
   import("./protocol").ServerMessage,
@@ -129,6 +150,7 @@ function buildAuthOkMessage(
 export function createServer(): WebSocketServer {
   initWorkspace();
   initAuth();
+  bootstrapAgentSessions();
 
   const wss = new WebSocketServer({
     host: config.host,
@@ -143,6 +165,42 @@ export function createServer(): WebSocketServer {
       if (client.readyState === WebSocket.OPEN) {
         client.send(serializeServerMessage(message));
       }
+    }
+  });
+
+  broadcastMobileClients = (message, except) => {
+    for (const client of wss.clients) {
+      if (client === except || isVscodeClient(client)) {
+        continue;
+      }
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(serializeServerMessage(message));
+      }
+    }
+  };
+
+  setAgentLoginCompleteHandler(async (providerId, success) => {
+    try {
+      const { providers, activeProviderId } = await refreshAgentProviders({ force: true });
+      broadcastMobileClients?.({
+        type: "agent_login_complete",
+        providerId,
+        success,
+        message: success
+          ? `Signed in to ${providerId}`
+          : "Sign-in ended — check status and try again",
+        activeProviderId,
+        providers,
+      });
+    } catch {
+      broadcastMobileClients?.({
+        type: "agent_login_complete",
+        providerId,
+        success: false,
+        message: "Sign-in ended but status could not be refreshed",
+        activeProviderId: getActiveAgentProviderId(),
+        providers: [],
+      });
     }
   });
 
@@ -374,6 +432,52 @@ function handleMessage(
 
     case "agent_sessions":
       handleAgentSessions(ws, message.id);
+      break;
+
+    case "agent_providers":
+      void handleAgentProviders(ws, message.id, message.force);
+      break;
+
+    case "agent_set_provider":
+      void handleAgentSetProvider(ws, message.id, message.providerId);
+      break;
+
+    case "agent_set_credentials":
+      void handleAgentSetCredentials(
+        ws,
+        message.id,
+        message.providerId,
+        message.apiKey
+      );
+      break;
+
+    case "agent_set_install_path":
+      void handleAgentSetInstallPath(
+        ws,
+        message.id,
+        message.providerId,
+        message.installPath
+      );
+      break;
+
+    case "agent_logout":
+      void handleAgentLogout(ws, message.id, message.providerId);
+      break;
+
+    case "agent_login_start":
+      void handleAgentLoginStart(ws, message.id, message.providerId);
+      break;
+
+    case "agent_login_cancel":
+      handleAgentLoginCancel(ws, message.id, message.providerId);
+      break;
+
+    case "agent_status":
+      handleAgentStatus(ws, message.id, message.sessionId);
+      break;
+
+    case "agent_retry":
+      void handleAgentRetry(ws, message.id, message.sessionId);
       break;
 
     case "vscode_register":
@@ -1019,7 +1123,20 @@ function handleAgentSend(
     `[Titus Host] Agent message (${sessionId.slice(0, 8)}): ${preview.slice(0, 80)}`
   );
 
-  void runAgentTurn(sessionId, trimmed, id, (message) => send(ws, message), attachments);
+  send(ws, {
+    type: "agent_ack",
+    id,
+    sessionId,
+    message: "Running on your PC — safe if your phone disconnects",
+  });
+
+  void runAgentTurn(
+    sessionId,
+    trimmed,
+    id,
+    (agentMessage) => broadcastMobileClients?.(agentMessage),
+    attachments
+  );
 }
 
 function handleAgentCancel(ws: WebSocket, sessionId: string): void {
@@ -1070,6 +1187,288 @@ function handleAgentSessions(ws: WebSocket, id: string): void {
     id,
     sessions: listAgentSessions(),
   });
+}
+
+async function handleAgentProviders(
+  ws: WebSocket,
+  id: string,
+  force?: boolean
+): Promise<void> {
+  if (!requireRequestId(ws, id)) return;
+
+  try {
+    const { providers, activeProviderId } = await refreshAgentProviders({ force });
+    send(ws, {
+      type: "agent_providers_result",
+      id,
+      providers,
+      activeProviderId,
+    });
+  } catch (err) {
+    send(ws, {
+      type: "agent_error",
+      id,
+      message: err instanceof Error ? err.message : "Failed to list agent providers",
+    });
+  }
+}
+
+async function handleAgentSetProvider(
+  ws: WebSocket,
+  id: string,
+  providerId: AgentProviderId
+): Promise<void> {
+  if (!requireRequestId(ws, id)) return;
+
+  if (!providerId) {
+    send(ws, { type: "agent_error", id, message: "Missing provider id" });
+    return;
+  }
+
+  try {
+    const result = await selectAgentProvider(providerId);
+    if (!result) {
+      send(ws, { type: "agent_error", id, message: "Unknown agent provider" });
+      return;
+    }
+
+    send(ws, {
+      type: "agent_providers_result",
+      id,
+      providers: result.providers,
+      activeProviderId: result.activeProviderId,
+    });
+
+    broadcastMobileClients?.(
+      {
+        type: "agent_provider_changed",
+        activeProviderId: result.activeProviderId,
+        providers: result.providers,
+      },
+      ws
+    );
+  } catch (err) {
+    send(ws, {
+      type: "agent_error",
+      id,
+      message: err instanceof Error ? err.message : "Failed to switch agent provider",
+    });
+  }
+}
+
+async function handleAgentSetCredentials(
+  ws: WebSocket,
+  id: string,
+  providerId: AgentProviderId,
+  apiKey?: string | null
+): Promise<void> {
+  if (!requireRequestId(ws, id)) return;
+
+  if (!providerId) {
+    send(ws, { type: "agent_error", id, message: "Missing provider id" });
+    return;
+  }
+
+  try {
+    const message = await setAgentProviderCredentials(providerId, apiKey ?? null);
+    const { providers, activeProviderId } = await refreshAgentProviders({ force: true });
+
+    send(ws, {
+      type: "agent_credentials_result",
+      id,
+      message,
+      activeProviderId,
+      providers,
+    });
+
+    broadcastMobileClients?.(
+      {
+        type: "agent_provider_changed",
+        activeProviderId,
+        providers,
+      },
+      ws
+    );
+  } catch (err) {
+    send(ws, {
+      type: "agent_error",
+      id,
+      message: err instanceof Error ? err.message : "Failed to update credentials",
+    });
+  }
+}
+
+async function handleAgentSetInstallPath(
+  ws: WebSocket,
+  id: string,
+  providerId: AgentProviderId,
+  installPath?: string | null
+): Promise<void> {
+  if (!requireRequestId(ws, id)) return;
+
+  if (!providerId) {
+    send(ws, { type: "agent_error", id, message: "Missing provider id" });
+    return;
+  }
+
+  try {
+    const message = await setAgentProviderInstallPath(providerId, installPath ?? null);
+    const { providers, activeProviderId } = await refreshAgentProviders({ force: true });
+
+    send(ws, {
+      type: "agent_credentials_result",
+      id,
+      message,
+      activeProviderId,
+      providers,
+    });
+
+    broadcastMobileClients?.(
+      {
+        type: "agent_provider_changed",
+        activeProviderId,
+        providers,
+      },
+      ws
+    );
+  } catch (err) {
+    send(ws, {
+      type: "agent_error",
+      id,
+      message: err instanceof Error ? err.message : "Failed to update install path",
+    });
+  }
+}
+
+async function handleAgentLogout(
+  ws: WebSocket,
+  id: string,
+  providerId: AgentProviderId
+): Promise<void> {
+  if (!requireRequestId(ws, id)) return;
+
+  if (!providerId) {
+    send(ws, { type: "agent_error", id, message: "Missing provider id" });
+    return;
+  }
+
+  try {
+    const message = await logoutAgentProvider(providerId);
+    const { providers, activeProviderId } = await refreshAgentProviders({ force: true });
+
+    send(ws, {
+      type: "agent_credentials_result",
+      id,
+      message,
+      activeProviderId,
+      providers,
+    });
+
+    broadcastMobileClients?.(
+      {
+        type: "agent_provider_changed",
+        activeProviderId,
+        providers,
+      },
+      ws
+    );
+  } catch (err) {
+    send(ws, {
+      type: "agent_error",
+      id,
+      message: err instanceof Error ? err.message : "Failed to sign out",
+    });
+  }
+}
+
+async function handleAgentLoginStart(
+  ws: WebSocket,
+  id: string,
+  providerId: AgentProviderId
+): Promise<void> {
+  if (!requireRequestId(ws, id)) return;
+
+  if (!providerId) {
+    send(ws, { type: "agent_error", id, message: "Missing provider id" });
+    return;
+  }
+
+  try {
+    const { loginUrl, label } = await startAgentProviderLogin(providerId);
+    send(ws, {
+      type: "agent_login_result",
+      id,
+      providerId,
+      loginUrl,
+      message: `Sign in to ${label} with your email and password`,
+    });
+  } catch (err) {
+    send(ws, {
+      type: "agent_error",
+      id,
+      message: err instanceof Error ? err.message : "Failed to start sign-in",
+    });
+  }
+}
+
+function handleAgentLoginCancel(
+  ws: WebSocket,
+  id: string,
+  providerId: AgentProviderId
+): void {
+  if (!requireRequestId(ws, id)) return;
+
+  if (!providerId) {
+    send(ws, { type: "agent_error", id, message: "Missing provider id" });
+    return;
+  }
+
+  cancelAgentProviderLogin(providerId);
+  send(ws, {
+    type: "agent_login_result",
+    id,
+    providerId,
+    loginUrl: "",
+    message: "Sign-in cancelled",
+  });
+}
+
+function handleAgentStatus(
+  ws: WebSocket,
+  id: string,
+  sessionId?: string
+): void {
+  if (!requireRequestId(ws, id)) return;
+
+  send(ws, {
+    type: "agent_status_result",
+    id,
+    sessions: getAgentStatus(sessionId),
+  });
+}
+
+async function handleAgentRetry(
+  ws: WebSocket,
+  id: string,
+  sessionId: string
+): Promise<void> {
+  if (!requireRequestId(ws, id)) return;
+
+  if (!sessionId || typeof sessionId !== "string") {
+    send(ws, { type: "agent_error", id, message: "Missing session id" });
+    return;
+  }
+
+  send(ws, {
+    type: "agent_ack",
+    id,
+    sessionId,
+    message: "Retrying on your PC",
+  });
+
+  void retryAgentTurn(sessionId, id, (agentMessage) =>
+    broadcastMobileClients?.(agentMessage)
+  );
 }
 
 function handleAuth(ws: WebSocket, token: string): void {

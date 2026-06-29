@@ -4,11 +4,12 @@ import {
   FlatList,
   Modal,
   Pressable,
-  StyleSheet,
   Text,
   View,
 } from "react-native";
+import { useTheme } from "../context/ThemeContext";
 import { useTabBarInset } from "../hooks/useTabBarInset";
+import { useThemedStyles } from "../hooks/useThemedStyles";
 import { titusClient } from "../services/websocket";
 import { BrowseEntry, BrowseRoot, EditorId, RecentFolder } from "../types/protocol";
 
@@ -37,6 +38,229 @@ export default function ProjectsScreen({
   onWorkspaceChange,
   onError,
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles((c) => ({
+    container: {
+      flex: 1,
+    },
+    list: {
+      flex: 1,
+    },
+    currentCard: {
+      backgroundColor: c.surfaceElevated,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 12,
+    },
+    cardLabel: {
+      color: c.textMuted,
+      fontSize: 12,
+      marginBottom: 4,
+    },
+    currentName: {
+      color: c.textPrimary,
+      fontSize: 18,
+      fontWeight: "700",
+    },
+    vscodeBadge: {
+      color: c.success,
+      fontSize: 12,
+      fontWeight: "600",
+      marginTop: 8,
+    },
+    vscodeHint: {
+      color: c.textMuted,
+      fontSize: 12,
+      marginTop: 8,
+      lineHeight: 18,
+    },
+    currentPath: {
+      color: c.textMuted,
+      fontSize: 12,
+      marginTop: 6,
+    },
+    actions: {
+      gap: 8,
+      marginBottom: 8,
+    },
+    editorBtn: {
+      borderRadius: 10,
+      paddingVertical: 14,
+      alignItems: "center",
+    },
+    cursorBtn: {
+      backgroundColor: c.accent,
+    },
+    vscodeBtn: {
+      backgroundColor: c.buttonPrimary,
+    },
+    editorBtnText: {
+      color: c.onPrimary,
+      fontWeight: "700",
+      fontSize: 15,
+    },
+    secondaryActions: {
+      gap: 8,
+      marginBottom: 16,
+    },
+    secondaryBtn: {
+      backgroundColor: c.buttonSecondary,
+      borderRadius: 8,
+      paddingVertical: 10,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    secondaryBtnText: {
+      color: c.textSecondary,
+      fontWeight: "600",
+      fontSize: 13,
+    },
+    sectionTitle: {
+      color: c.textSecondary,
+      fontWeight: "600",
+      fontSize: 14,
+      marginBottom: 8,
+    },
+    loader: {
+      marginTop: 16,
+    },
+    empty: {
+      color: c.textMuted,
+      textAlign: "center",
+      marginTop: 16,
+      fontSize: 14,
+    },
+    recentRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      paddingVertical: 12,
+      paddingHorizontal: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: c.surfaceMuted,
+      borderRadius: 8,
+    },
+    recentRowActive: {
+      backgroundColor: c.surfaceElevated,
+      borderColor: c.buttonPrimary,
+      borderWidth: 1,
+    },
+    recentIcon: {
+      fontSize: 18,
+      marginRight: 10,
+      marginTop: 2,
+    },
+    recentBody: {
+      flex: 1,
+    },
+    recentName: {
+      color: c.textPrimary,
+      fontSize: 15,
+      fontWeight: "600",
+    },
+    recentPath: {
+      color: c.textMuted,
+      fontSize: 12,
+      marginTop: 2,
+    },
+    recentMeta: {
+      color: c.textMuted,
+      fontSize: 11,
+      marginTop: 4,
+    },
+    btnDisabled: {
+      opacity: 0.5,
+    },
+    browseModal: {
+      flex: 1,
+      backgroundColor: c.background,
+      paddingTop: 48,
+      paddingHorizontal: 16,
+    },
+    browseHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 12,
+    },
+    browseTitle: {
+      color: c.textPrimary,
+      fontSize: 18,
+      fontWeight: "700",
+    },
+    browseClose: {
+      color: c.link,
+      fontWeight: "600",
+    },
+    rootRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 12,
+    },
+    rootChip: {
+      backgroundColor: c.buttonSecondary,
+      borderRadius: 16,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    rootChipText: {
+      color: c.textSecondary,
+      fontSize: 12,
+      fontWeight: "600",
+    },
+    browsePath: {
+      color: c.textMuted,
+      fontSize: 12,
+      marginBottom: 8,
+    },
+    browseRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: c.surfaceMuted,
+    },
+    browseRowIcon: {
+      fontSize: 16,
+      marginRight: 10,
+    },
+    browseRowName: {
+      color: c.textPrimary,
+      fontSize: 15,
+    },
+    browseFooter: {
+      flexDirection: "row",
+      gap: 8,
+      paddingVertical: 12,
+    },
+    browseFooterBtn: {
+      flex: 1,
+      backgroundColor: c.buttonSecondary,
+      borderRadius: 8,
+      paddingVertical: 12,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    browseFooterText: {
+      color: c.textSecondary,
+      fontWeight: "600",
+    },
+    browseSelectBtn: {
+      backgroundColor: c.buttonSuccess,
+      borderColor: c.buttonSuccess,
+      flex: 2,
+    },
+    browseSelectText: {
+      color: c.onPrimary,
+      fontWeight: "700",
+    },
+  }));
   const [recent, setRecent] = useState<RecentFolder[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -233,7 +457,7 @@ export default function ProjectsScreen({
       <Text style={styles.sectionTitle}>Recent folders</Text>
 
       {loading ? (
-        <ActivityIndicator color="#58a6ff" style={styles.loader} />
+        <ActivityIndicator color={colors.iconAccent} style={styles.loader} />
       ) : (
         <FlatList
           data={recent}
@@ -297,7 +521,7 @@ export default function ProjectsScreen({
           </Text>
 
           {browseLoading ? (
-            <ActivityIndicator color="#58a6ff" style={styles.loader} />
+            <ActivityIndicator color={colors.iconAccent} style={styles.loader} />
           ) : (
             <FlatList
               data={browseEntries}
@@ -330,226 +554,3 @@ export default function ProjectsScreen({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  list: {
-    flex: 1,
-  },
-  currentCard: {
-    backgroundColor: "#161b22",
-    borderWidth: 1,
-    borderColor: "#30363d",
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 12,
-  },
-  cardLabel: {
-    color: "#8b949e",
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  currentName: {
-    color: "#f0f6fc",
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  vscodeBadge: {
-    color: "#3fb950",
-    fontSize: 12,
-    fontWeight: "600",
-    marginTop: 8,
-  },
-  vscodeHint: {
-    color: "#8b949e",
-    fontSize: 12,
-    marginTop: 8,
-    lineHeight: 18,
-  },
-  currentPath: {
-    color: "#8b949e",
-    fontSize: 12,
-    marginTop: 6,
-  },
-  actions: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  editorBtn: {
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  cursorBtn: {
-    backgroundColor: "#6e40c9",
-  },
-  vscodeBtn: {
-    backgroundColor: "#1f6feb",
-  },
-  editorBtnText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 15,
-  },
-  secondaryActions: {
-    gap: 8,
-    marginBottom: 16,
-  },
-  secondaryBtn: {
-    backgroundColor: "#21262d",
-    borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#30363d",
-  },
-  secondaryBtnText: {
-    color: "#c9d1d9",
-    fontWeight: "600",
-    fontSize: 13,
-  },
-  sectionTitle: {
-    color: "#c9d1d9",
-    fontWeight: "600",
-    fontSize: 14,
-    marginBottom: 8,
-  },
-  loader: {
-    marginTop: 16,
-  },
-  empty: {
-    color: "#8b949e",
-    textAlign: "center",
-    marginTop: 16,
-    fontSize: 14,
-  },
-  recentRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#21262d",
-    borderRadius: 8,
-  },
-  recentRowActive: {
-    backgroundColor: "#161b22",
-    borderColor: "#1f6feb",
-    borderWidth: 1,
-  },
-  recentIcon: {
-    fontSize: 18,
-    marginRight: 10,
-    marginTop: 2,
-  },
-  recentBody: {
-    flex: 1,
-  },
-  recentName: {
-    color: "#f0f6fc",
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  recentPath: {
-    color: "#8b949e",
-    fontSize: 12,
-    marginTop: 2,
-  },
-  recentMeta: {
-    color: "#6e7681",
-    fontSize: 11,
-    marginTop: 4,
-  },
-  btnDisabled: {
-    opacity: 0.5,
-  },
-  browseModal: {
-    flex: 1,
-    backgroundColor: "#010409",
-    paddingTop: 48,
-    paddingHorizontal: 16,
-  },
-  browseHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  browseTitle: {
-    color: "#f0f6fc",
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  browseClose: {
-    color: "#58a6ff",
-    fontWeight: "600",
-  },
-  rootRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 12,
-  },
-  rootChip: {
-    backgroundColor: "#21262d",
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: "#30363d",
-  },
-  rootChipText: {
-    color: "#c9d1d9",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  browsePath: {
-    color: "#8b949e",
-    fontSize: 12,
-    marginBottom: 8,
-  },
-  browseRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#21262d",
-  },
-  browseRowIcon: {
-    fontSize: 16,
-    marginRight: 10,
-  },
-  browseRowName: {
-    color: "#f0f6fc",
-    fontSize: 15,
-  },
-  browseFooter: {
-    flexDirection: "row",
-    gap: 8,
-    paddingVertical: 12,
-  },
-  browseFooterBtn: {
-    flex: 1,
-    backgroundColor: "#21262d",
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#30363d",
-  },
-  browseFooterText: {
-    color: "#c9d1d9",
-    fontWeight: "600",
-  },
-  browseSelectBtn: {
-    backgroundColor: "#238636",
-    borderColor: "#238636",
-    flex: 2,
-  },
-  browseSelectText: {
-    color: "#fff",
-    fontWeight: "700",
-  },
-});

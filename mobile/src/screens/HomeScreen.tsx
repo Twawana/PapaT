@@ -2,12 +2,12 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Platform,
   Pressable,
-  StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
 import { TerminalOutput } from "../components/TerminalOutput";
+import { useThemedStyles } from "../hooks/useThemedStyles";
 import { titusClient } from "../services/websocket";
 import {
   ExecutionState,
@@ -29,6 +29,58 @@ function createExecutionId(): string {
 }
 
 export default function HomeScreen({ isConnected, onError }: Props) {
+  const styles = useThemedStyles((c) => ({
+    flex: {
+      flex: 1,
+    },
+    editorSection: {
+      flex: 1,
+      minHeight: 160,
+      marginBottom: 12,
+    },
+    sectionHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 8,
+    },
+    sectionTitle: {
+      color: c.textSecondary,
+      fontWeight: "600",
+      fontSize: 14,
+    },
+    runBtn: {
+      backgroundColor: c.buttonPrimary,
+      borderRadius: 8,
+      paddingHorizontal: 20,
+      paddingVertical: 8,
+    },
+    runText: {
+      color: c.onPrimary,
+      fontWeight: "700",
+      fontSize: 14,
+    },
+    btnDisabled: {
+      opacity: 0.5,
+    },
+    codeEditor: {
+      flex: 1,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 8,
+      padding: 12,
+      color: c.textSecondary,
+      fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+      fontSize: 13,
+      lineHeight: 20,
+    },
+    terminalSection: {
+      flex: 1,
+      minHeight: 140,
+      marginBottom: 8,
+    },
+  }));
   const [code, setCode] = useState(DEFAULT_CODE);
   const [execution, setExecution] = useState<ExecutionState>({
     id: null,
@@ -147,56 +199,3 @@ export default function HomeScreen({ isConnected, onError }: Props) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  editorSection: {
-    flex: 1,
-    minHeight: 160,
-    marginBottom: 12,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  sectionTitle: {
-    color: "#c9d1d9",
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  runBtn: {
-    backgroundColor: "#1f6feb",
-    borderRadius: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-  },
-  runText: {
-    color: "#ffffff",
-    fontWeight: "700",
-    fontSize: 14,
-  },
-  btnDisabled: {
-    opacity: 0.5,
-  },
-  codeEditor: {
-    flex: 1,
-    backgroundColor: "#0d1117",
-    borderWidth: 1,
-    borderColor: "#30363d",
-    borderRadius: 8,
-    padding: 12,
-    color: "#c9d1d9",
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    fontSize: 13,
-    lineHeight: 20,
-  },
-  terminalSection: {
-    flex: 1,
-    minHeight: 140,
-    marginBottom: 8,
-  },
-});

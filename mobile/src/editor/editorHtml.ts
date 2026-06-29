@@ -1,8 +1,14 @@
 import { codemirrorMode, EditorMode } from "../utils/language";
 
-export function buildEditorHtml(initialContent: string, mode: EditorMode): string {
+export function buildEditorHtml(
+  initialContent: string,
+  mode: EditorMode,
+  isDark = true
+): string {
   const cmMode = codemirrorMode(mode);
   const escaped = JSON.stringify(initialContent);
+  const theme = isDark ? "dracula" : "eclipse";
+  const bgColor = isDark ? "#0d1117" : "#ffffff";
 
   return `<!DOCTYPE html>
 <html>
@@ -11,9 +17,10 @@ export function buildEditorHtml(initialContent: string, mode: EditorMode): strin
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/eclipse.min.css"/>
 <style>
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; height: 100%; background: #0d1117; overflow: hidden; }
+  html, body { margin: 0; padding: 0; height: 100%; background: ${bgColor}; overflow: hidden; }
   .CodeMirror { height: 100% !important; font-size: 13px; line-height: 1.45; font-family: Menlo, Monaco, Consolas, monospace; }
   .CodeMirror-scroll { overflow: auto !important; }
 </style>
@@ -26,10 +33,23 @@ export function buildEditorHtml(initialContent: string, mode: EditorMode): strin
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/markdown/markdown.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/meta.min.js"></script>
 <script>
+  const isDark = ${isDark ? "true" : "false"};
+  const darkBg = "#0d1117";
+  const lightBg = "#ffffff";
+
+  function applyTheme(dark) {
+    const bg = dark ? darkBg : lightBg;
+    const themeName = dark ? "dracula" : "eclipse";
+    editor.setOption("theme", themeName);
+    document.documentElement.style.background = bg;
+    document.body.style.background = bg;
+    editor.getWrapperElement().style.background = bg;
+  }
+
   const editor = CodeMirror(document.body, {
     value: ${escaped},
     mode: ${JSON.stringify(cmMode)},
-    theme: "dracula",
+    theme: ${JSON.stringify(theme)},
     lineNumbers: true,
     lineWrapping: false,
     indentUnit: 2,
@@ -60,6 +80,8 @@ export function buildEditorHtml(initialContent: string, mode: EditorMode): strin
       suppressChange = false;
     } else if (data.type === "setMode") {
       editor.setOption("mode", data.mode || "plaintext");
+    } else if (data.type === "setTheme") {
+      applyTheme(data.isDark !== false);
     } else if (data.type === "find") {
       const query = data.query || "";
       if (!query) return;
@@ -83,6 +105,7 @@ export function buildEditorHtml(initialContent: string, mode: EditorMode): strin
     }
   });
 
+  applyTheme(isDark);
   window.ReactNativeWebView.postMessage(JSON.stringify({ type: "ready" }));
 </script>
 </body>

@@ -54,6 +54,7 @@ const ALL_TABS: NavigationTabConfig[] = [
         isConnected={ctx.isConnected}
         workspacePath={ctx.workspacePath}
         workspaceName={ctx.workspaceName}
+        onWorkspaceChange={ctx.onWorkspaceChange}
         onError={ctx.onError}
       />
     ),

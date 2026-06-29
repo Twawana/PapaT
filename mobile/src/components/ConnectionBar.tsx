@@ -3,11 +3,12 @@ import {
   ActivityIndicator,
   Keyboard,
   Pressable,
-  StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { useTheme } from "../context/ThemeContext";
+import { useThemedStyles } from "../hooks/useThemedStyles";
 import { ConnectionStatus } from "../types/protocol";
 import { QrPairModal } from "./QrPairModal";
 
@@ -28,6 +29,8 @@ interface Props {
   onPairWithCode: (code: string) => void;
   onForgetDevice: () => void;
   onError: (message: string | null) => void;
+  detailsVisible: boolean;
+  onDetailsVisibleChange: (visible: boolean) => void;
 }
 
 export function ConnectionBar({
@@ -47,28 +50,176 @@ export function ConnectionBar({
   onPairWithCode,
   onForgetDevice,
   onError,
+  detailsVisible,
+  onDetailsVisibleChange,
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles((c) => ({
+    compactRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 8,
+      paddingVertical: 6,
+      paddingHorizontal: 4,
+    },
+    compactStatusText: {
+      flex: 1,
+      color: c.textMuted,
+      fontSize: 13,
+    },
+    toggleHint: {
+      color: c.link,
+      fontSize: 12,
+      fontWeight: "600",
+    },
+    connectionBar: {
+      flexDirection: "row",
+      gap: 8,
+      marginBottom: 8,
+    },
+    input: {
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      color: c.textSecondary,
+      fontSize: 14,
+    },
+    hostInput: {
+      flex: 1,
+    },
+    portInput: {
+      width: 72,
+    },
+    codeRow: {
+      flexDirection: "row",
+      gap: 8,
+      marginBottom: 8,
+    },
+    codeInput: {
+      flex: 1,
+      letterSpacing: 2,
+      fontWeight: "700",
+    },
+    codeBtn: {
+      backgroundColor: c.buttonSecondary,
+      borderRadius: 8,
+      paddingHorizontal: 14,
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    codeBtnText: {
+      color: c.textSecondary,
+      fontWeight: "700",
+      fontSize: 13,
+    },
+    connectBtn: {
+      backgroundColor: c.buttonSuccess,
+      borderRadius: 8,
+      paddingHorizontal: 16,
+      justifyContent: "center",
+      alignItems: "center",
+      minWidth: 90,
+    },
+    disconnectBtn: {
+      backgroundColor: c.buttonSecondary,
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      justifyContent: "center",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: c.border,
+      minWidth: 90,
+    },
+    connectText: {
+      color: c.onPrimary,
+      fontWeight: "600",
+      fontSize: 14,
+    },
+    disconnectText: {
+      color: c.textSecondary,
+      fontWeight: "600",
+      fontSize: 13,
+    },
+    statusRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 8,
+    },
+    dot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
+    statusText: {
+      color: c.textMuted,
+      fontSize: 13,
+    },
+    errorText: {
+      color: c.errorText,
+      fontSize: 13,
+      marginBottom: 8,
+    },
+    btnDisabled: {
+      opacity: 0.5,
+    },
+    secondaryRow: {
+      flexDirection: "row",
+      gap: 8,
+      marginBottom: 8,
+    },
+    scanBtn: {
+      flex: 1,
+      backgroundColor: c.accent,
+      borderRadius: 8,
+      paddingVertical: 10,
+      alignItems: "center",
+    },
+    scanBtnText: {
+      color: c.onPrimary,
+      fontWeight: "700",
+      fontSize: 13,
+    },
+    forgetBtn: {
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: 8,
+      backgroundColor: c.buttonSecondary,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    forgetBtnText: {
+      color: c.textMuted,
+      fontWeight: "600",
+      fontSize: 12,
+    },
+  }));
+
   const [qrVisible, setQrVisible] = useState(false);
   const [manualCode, setManualCode] = useState("");
-  const [detailsVisible, setDetailsVisible] = useState(true);
 
   const isConnected = connectionStatus === "connected";
   const showDetails = !isConnected || detailsVisible;
 
   useEffect(() => {
     if (!isConnected) {
-      setDetailsVisible(true);
+      onDetailsVisibleChange(true);
     }
-  }, [isConnected]);
+  }, [isConnected, onDetailsVisibleChange]);
 
   const statusColor =
     connectionStatus === "connected"
-      ? "#3fb950"
+      ? colors.success
       : connectionStatus === "connecting" || connectionStatus === "authenticating"
-        ? "#d29922"
+        ? colors.warning
         : connectionStatus === "error"
-          ? "#f85149"
-          : "#8b949e";
+          ? colors.error
+          : colors.textMuted;
 
   const busy =
     connectionStatus === "connecting" || connectionStatus === "authenticating";
@@ -85,7 +236,7 @@ export function ConnectionBar({
       {isConnected ? (
         <Pressable
           style={styles.compactRow}
-          onPress={() => setDetailsVisible((visible) => !visible)}
+          onPress={() => onDetailsVisibleChange(!detailsVisible)}
         >
           <View style={[styles.dot, { backgroundColor: statusColor }]} />
           <Text style={styles.compactStatusText} numberOfLines={1}>
@@ -105,7 +256,7 @@ export function ConnectionBar({
               value={host}
               onChangeText={onHostChange}
               placeholder="PC IP address"
-              placeholderTextColor="#484f58"
+              placeholderTextColor={colors.placeholder}
               autoCapitalize="none"
               autoCorrect={false}
               returnKeyType="done"
@@ -116,7 +267,7 @@ export function ConnectionBar({
               value={port}
               onChangeText={onPortChange}
               placeholder="Port"
-              placeholderTextColor="#484f58"
+              placeholderTextColor={colors.placeholder}
               keyboardType="number-pad"
               returnKeyType="done"
               onSubmitEditing={Keyboard.dismiss}
@@ -132,7 +283,7 @@ export function ConnectionBar({
                 disabled={busy}
               >
                 {busy ? (
-                  <ActivityIndicator color="#0d1117" size="small" />
+                  <ActivityIndicator color={colors.spinnerOnAccent} size="small" />
                 ) : (
                   <Text style={styles.connectText}>
                     {isPaired ? "Connect" : "Pair"}
@@ -149,7 +300,7 @@ export function ConnectionBar({
                 value={manualCode}
                 onChangeText={(text) => setManualCode(text.toUpperCase())}
                 placeholder="6-char code from PC"
-                placeholderTextColor="#484f58"
+                placeholderTextColor={colors.placeholder}
                 autoCapitalize="characters"
                 autoCorrect={false}
                 maxLength={6}
@@ -214,149 +365,3 @@ export function ConnectionBar({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  compactRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-  },
-  compactStatusText: {
-    flex: 1,
-    color: "#8b949e",
-    fontSize: 13,
-  },
-  toggleHint: {
-    color: "#58a6ff",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  connectionBar: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: "#161b22",
-    borderWidth: 1,
-    borderColor: "#30363d",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: "#c9d1d9",
-    fontSize: 14,
-  },
-  hostInput: {
-    flex: 1,
-  },
-  portInput: {
-    width: 72,
-  },
-  codeRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 8,
-  },
-  codeInput: {
-    flex: 1,
-    letterSpacing: 2,
-    fontWeight: "700",
-  },
-  codeBtn: {
-    backgroundColor: "#21262d",
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#30363d",
-  },
-  codeBtnText: {
-    color: "#c9d1d9",
-    fontWeight: "700",
-    fontSize: 13,
-  },
-  connectBtn: {
-    backgroundColor: "#238636",
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    justifyContent: "center",
-    alignItems: "center",
-    minWidth: 90,
-  },
-  disconnectBtn: {
-    backgroundColor: "#21262d",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#30363d",
-    minWidth: 90,
-  },
-  connectText: {
-    color: "#ffffff",
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  disconnectText: {
-    color: "#c9d1d9",
-    fontWeight: "600",
-    fontSize: 13,
-  },
-  statusRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 8,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  statusText: {
-    color: "#8b949e",
-    fontSize: 13,
-  },
-  errorText: {
-    color: "#f85149",
-    fontSize: 13,
-    marginBottom: 8,
-  },
-  btnDisabled: {
-    opacity: 0.5,
-  },
-  secondaryRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 8,
-  },
-  scanBtn: {
-    flex: 1,
-    backgroundColor: "#1f6feb",
-    borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: "center",
-  },
-  scanBtnText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 13,
-  },
-  forgetBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: "#21262d",
-    borderWidth: 1,
-    borderColor: "#30363d",
-  },
-  forgetBtnText: {
-    color: "#8b949e",
-    fontWeight: "600",
-    fontSize: 12,
-  },
-});

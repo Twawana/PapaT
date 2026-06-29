@@ -1,4 +1,4 @@
-import { ClientMessage, EditorId, ExecuteLanguage, ServerMessage, ShellKind } from "../types/protocol";
+import { AgentProviderId, ClientMessage, EditorId, ExecuteLanguage, ServerMessage, ShellKind } from "../types/protocol";
 import { errorMessage } from "../utils/errors";
 
 type MessageHandler = (message: ServerMessage) => void;
@@ -315,6 +315,87 @@ export class TitusClient {
     return this.request(id, { type: "agent_sessions", id }, [
       "agent_sessions_result",
     ]);
+  }
+
+  listAgentProviders(force = false): Promise<
+    Extract<ServerMessage, { type: "agent_providers_result" }>
+  > {
+    const id = createRequestId("agent-providers");
+    return this.request(id, { type: "agent_providers", id, force }, [
+      "agent_providers_result",
+    ]);
+  }
+
+  setAgentProvider(
+    providerId: AgentProviderId
+  ): Promise<Extract<ServerMessage, { type: "agent_providers_result" }>> {
+    const id = createRequestId("agent-set-provider");
+    return this.request(id, { type: "agent_set_provider", id, providerId }, [
+      "agent_providers_result",
+    ]);
+  }
+
+  setAgentCredentials(
+    providerId: AgentProviderId,
+    apiKey: string | null
+  ): Promise<Extract<ServerMessage, { type: "agent_credentials_result" }>> {
+    const id = createRequestId("agent-set-credentials");
+    return this.request(
+      id,
+      { type: "agent_set_credentials", id, providerId, apiKey },
+      ["agent_credentials_result"]
+    );
+  }
+
+  setAgentInstallPath(
+    providerId: AgentProviderId,
+    installPath: string | null
+  ): Promise<Extract<ServerMessage, { type: "agent_credentials_result" }>> {
+    const id = createRequestId("agent-set-install-path");
+    return this.request(
+      id,
+      { type: "agent_set_install_path", id, providerId, installPath },
+      ["agent_credentials_result"]
+    );
+  }
+
+  logoutAgentProvider(
+    providerId: AgentProviderId
+  ): Promise<Extract<ServerMessage, { type: "agent_credentials_result" }>> {
+    const id = createRequestId("agent-logout");
+    return this.request(id, { type: "agent_logout", id, providerId }, [
+      "agent_credentials_result",
+    ]);
+  }
+
+  startAgentLogin(
+    providerId: AgentProviderId
+  ): Promise<Extract<ServerMessage, { type: "agent_login_result" }>> {
+    const id = createRequestId("agent-login-start");
+    return this.request(id, { type: "agent_login_start", id, providerId }, [
+      "agent_login_result",
+    ]);
+  }
+
+  cancelAgentLogin(providerId: AgentProviderId): void {
+    const id = createRequestId("agent-login-cancel");
+    this.send({ type: "agent_login_cancel", id, providerId });
+  }
+
+  getAgentStatus(
+    sessionId?: string
+  ): Promise<Extract<ServerMessage, { type: "agent_status_result" }>> {
+    const id = createRequestId("agent-status");
+    return this.request(id, { type: "agent_status", id, sessionId }, [
+      "agent_status_result",
+    ]);
+  }
+
+  retryAgent(
+    sessionId: string
+  ): Promise<Extract<ServerMessage, { type: "agent_ack" }>> {
+    const id = createRequestId("agent-retry");
+    return this.request(id, { type: "agent_retry", id, sessionId }, ["agent_ack"]);
   }
 
   getVscodeStatus(): Promise<

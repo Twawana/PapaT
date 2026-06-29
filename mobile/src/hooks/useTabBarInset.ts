@@ -1,5 +1,5 @@
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { tabBarInset } from "../components/LiquidGlassTabBar";
+import { tabBarInset } from "../constants/tabBarLayout";
 import { useKeyboardVisible } from "../utils/keyboard";
 
 /** Space to reserve at the bottom so content can scroll under the floating tab bar. */

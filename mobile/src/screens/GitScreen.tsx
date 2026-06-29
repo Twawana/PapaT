@@ -13,8 +13,10 @@ import {
   View,
 } from "react-native";
 import { titusClient } from "../services/websocket";
+import { useTheme } from "../context/ThemeContext";
 import { dismissKeyboard, keyboardPersistTaps } from "../utils/keyboard";
 import { useTabBarInset } from "../hooks/useTabBarInset";
+import { useThemedStyles } from "../hooks/useThemedStyles";
 import { GitFileStatus, GitStatusResult } from "../types/protocol";
 
 interface Props {
@@ -37,6 +39,220 @@ function statusLabel(file: GitFileStatus): string {
 }
 
 export default function GitScreen({ isConnected, onError, onOpenFile }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles((c) => ({
+    flex: { flex: 1 },
+    center: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 16,
+    },
+    hint: {
+      color: c.textMuted,
+      textAlign: "center",
+      marginVertical: 8,
+    },
+    hintSub: {
+      color: c.placeholder,
+      textAlign: "center",
+      fontSize: 12,
+      marginBottom: 12,
+      paddingHorizontal: 16,
+    },
+    header: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 8,
+      gap: 8,
+    },
+    headerInfo: {
+      flex: 1,
+    },
+    branch: {
+      color: c.textPrimary,
+      fontSize: 18,
+      fontWeight: "700",
+    },
+    meta: {
+      color: c.textMuted,
+      fontSize: 12,
+      marginTop: 2,
+    },
+    actionRow: {
+      maxHeight: 44,
+      marginBottom: 8,
+    },
+    actionChip: {
+      backgroundColor: c.buttonSecondary,
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      marginRight: 6,
+      borderWidth: 1,
+      borderColor: c.border,
+      minWidth: 72,
+      alignItems: "center",
+    },
+    actionChipBusy: {
+      borderColor: c.buttonPrimary,
+    },
+    actionChipText: {
+      color: c.link,
+      fontSize: 12,
+      fontWeight: "600",
+    },
+    btn: {
+      backgroundColor: c.buttonSecondary,
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    btnText: {
+      color: c.textPrimary,
+      fontWeight: "600",
+      fontSize: 13,
+    },
+    list: {
+      flex: 1,
+      marginBottom: 8,
+    },
+    fileRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 10,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.surfaceMuted,
+      gap: 8,
+    },
+    fileStatus: {
+      color: c.warning,
+      fontSize: 11,
+      fontWeight: "700",
+      width: 72,
+    },
+    filePath: {
+      flex: 1,
+      color: c.textSecondary,
+      fontSize: 13,
+    },
+    stageBtn: {
+      width: 28,
+      height: 28,
+      borderRadius: 6,
+      backgroundColor: c.buttonSecondary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    stageText: {
+      color: c.success,
+      fontSize: 18,
+      lineHeight: 20,
+    },
+    commitBox: {
+      borderTopWidth: 1,
+      borderTopColor: c.border,
+      paddingTop: 8,
+      gap: 8,
+    },
+    commitInput: {
+      backgroundColor: c.surfaceElevated,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 8,
+      color: c.textPrimary,
+      padding: 10,
+      minHeight: 56,
+      fontSize: 14,
+      textAlignVertical: "top",
+    },
+    commitBtn: {
+      backgroundColor: c.buttonSuccess,
+      borderRadius: 8,
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      alignItems: "center",
+    },
+    commitBtnText: {
+      color: c.onPrimary,
+      fontWeight: "700",
+    },
+    disabled: { opacity: 0.5 },
+    outputBox: {
+      maxHeight: 160,
+      marginTop: 8,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 8,
+      padding: 8,
+    },
+    outputTitle: {
+      color: c.textMuted,
+      fontSize: 12,
+      marginBottom: 4,
+      fontWeight: "600",
+    },
+    outputScroll: {
+      maxHeight: 110,
+    },
+    outputText: {
+      color: c.textSecondary,
+      fontFamily: "monospace",
+      fontSize: 11,
+      lineHeight: 16,
+    },
+    linkBtn: {
+      marginTop: 4,
+    },
+    linkText: {
+      color: c.link,
+      fontSize: 12,
+    },
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: `${c.shadow}BF`,
+      justifyContent: "center",
+      padding: 24,
+    },
+    modalSheet: {
+      backgroundColor: c.surfaceElevated,
+      borderRadius: 12,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    modalTitle: {
+      color: c.textPrimary,
+      fontSize: 18,
+      fontWeight: "700",
+      marginBottom: 4,
+    },
+    modalHint: {
+      color: c.textMuted,
+      fontSize: 12,
+      marginBottom: 12,
+    },
+    modalInput: {
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 8,
+      color: c.textPrimary,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      fontSize: 15,
+      marginBottom: 12,
+    },
+    modalActions: {
+      flexDirection: "row",
+      justifyContent: "flex-end",
+      gap: 8,
+    },
+  }));
   const [status, setStatus] = useState<GitStatusResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -188,7 +404,7 @@ export default function GitScreen({ isConnected, onError, onOpenFile }: Props) {
   if (loading && !status) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color="#58a6ff" />
+        <ActivityIndicator color={colors.iconAccent} />
       </View>
     );
   }
@@ -259,7 +475,7 @@ export default function GitScreen({ isConnected, onError, onOpenFile }: Props) {
             disabled={!!actionLoading && actionLoading !== action.label}
           >
             {actionLoading === action.label ? (
-              <ActivityIndicator color="#58a6ff" size="small" />
+              <ActivityIndicator color={colors.iconAccent} size="small" />
             ) : (
               <Text style={styles.actionChipText}>{action.label}</Text>
             )}
@@ -302,7 +518,7 @@ export default function GitScreen({ isConnected, onError, onOpenFile }: Props) {
           value={commitMessage}
           onChangeText={setCommitMessage}
           placeholder="Commit message"
-          placeholderTextColor="#484f58"
+          placeholderTextColor={colors.placeholder}
           multiline
         />
         <Pressable
@@ -344,7 +560,7 @@ export default function GitScreen({ isConnected, onError, onOpenFile }: Props) {
               value={newBranchName}
               onChangeText={setNewBranchName}
               placeholder="my-feature"
-              placeholderTextColor="#484f58"
+              placeholderTextColor={colors.placeholder}
               autoCapitalize="none"
               autoCorrect={false}
               autoFocus
@@ -363,217 +579,3 @@ export default function GitScreen({ isConnected, onError, onOpenFile }: Props) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 16,
-  },
-  hint: {
-    color: "#8b949e",
-    textAlign: "center",
-    marginVertical: 8,
-  },
-  hintSub: {
-    color: "#484f58",
-    textAlign: "center",
-    fontSize: 12,
-    marginBottom: 12,
-    paddingHorizontal: 16,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-    gap: 8,
-  },
-  headerInfo: {
-    flex: 1,
-  },
-  branch: {
-    color: "#f0f6fc",
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  meta: {
-    color: "#8b949e",
-    fontSize: 12,
-    marginTop: 2,
-  },
-  actionRow: {
-    maxHeight: 44,
-    marginBottom: 8,
-  },
-  actionChip: {
-    backgroundColor: "#21262d",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginRight: 6,
-    borderWidth: 1,
-    borderColor: "#30363d",
-    minWidth: 72,
-    alignItems: "center",
-  },
-  actionChipBusy: {
-    borderColor: "#1f6feb",
-  },
-  actionChipText: {
-    color: "#79c0ff",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  btn: {
-    backgroundColor: "#21262d",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: "#30363d",
-  },
-  btnText: {
-    color: "#f0f6fc",
-    fontWeight: "600",
-    fontSize: 13,
-  },
-  list: {
-    flex: 1,
-    marginBottom: 8,
-  },
-  fileRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#21262d",
-    gap: 8,
-  },
-  fileStatus: {
-    color: "#d29922",
-    fontSize: 11,
-    fontWeight: "700",
-    width: 72,
-  },
-  filePath: {
-    flex: 1,
-    color: "#c9d1d9",
-    fontSize: 13,
-  },
-  stageBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    backgroundColor: "#21262d",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  stageText: {
-    color: "#3fb950",
-    fontSize: 18,
-    lineHeight: 20,
-  },
-  commitBox: {
-    borderTopWidth: 1,
-    borderTopColor: "#30363d",
-    paddingTop: 8,
-    gap: 8,
-  },
-  commitInput: {
-    backgroundColor: "#161b22",
-    borderWidth: 1,
-    borderColor: "#30363d",
-    borderRadius: 8,
-    color: "#f0f6fc",
-    padding: 10,
-    minHeight: 56,
-    fontSize: 14,
-    textAlignVertical: "top",
-  },
-  commitBtn: {
-    backgroundColor: "#238636",
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    alignItems: "center",
-  },
-  commitBtnText: {
-    color: "#fff",
-    fontWeight: "700",
-  },
-  disabled: { opacity: 0.5 },
-  outputBox: {
-    maxHeight: 160,
-    marginTop: 8,
-    backgroundColor: "#0d1117",
-    borderWidth: 1,
-    borderColor: "#30363d",
-    borderRadius: 8,
-    padding: 8,
-  },
-  outputTitle: {
-    color: "#8b949e",
-    fontSize: 12,
-    marginBottom: 4,
-    fontWeight: "600",
-  },
-  outputScroll: {
-    maxHeight: 110,
-  },
-  outputText: {
-    color: "#c9d1d9",
-    fontFamily: "monospace",
-    fontSize: 11,
-    lineHeight: 16,
-  },
-  linkBtn: {
-    marginTop: 4,
-  },
-  linkText: {
-    color: "#58a6ff",
-    fontSize: 12,
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(1,4,9,0.75)",
-    justifyContent: "center",
-    padding: 24,
-  },
-  modalSheet: {
-    backgroundColor: "#161b22",
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#30363d",
-  },
-  modalTitle: {
-    color: "#f0f6fc",
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 4,
-  },
-  modalHint: {
-    color: "#8b949e",
-    fontSize: 12,
-    marginBottom: 12,
-  },
-  modalInput: {
-    backgroundColor: "#0d1117",
-    borderWidth: 1,
-    borderColor: "#30363d",
-    borderRadius: 8,
-    color: "#f0f6fc",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
-    marginBottom: 12,
-  },
-  modalActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 8,
-  },
-});

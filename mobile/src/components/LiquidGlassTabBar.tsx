@@ -14,13 +14,10 @@ import {
   resolveTabLabel,
   TabId,
 } from "../config/navigationTabs";
+import { useTheme } from "../context/ThemeContext";
+import { useThemedStyles } from "../hooks/useThemedStyles";
 
-export const TAB_BAR_HEIGHT = 62;
-export const TAB_BAR_BOTTOM_MARGIN = 10;
-
-export function tabBarInset(bottomInset: number): number {
-  return TAB_BAR_HEIGHT + TAB_BAR_BOTTOM_MARGIN + bottomInset;
-}
+import { TAB_BAR_BOTTOM_MARGIN, TAB_BAR_HEIGHT } from "../constants/tabBarLayout";
 
 const TAB_ICONS: Record<
   TabId,
@@ -49,13 +46,106 @@ export function LiquidGlassTabBar({
   bottomInset,
   onSelectTab,
 }: Props) {
+  const { colors, isDark } = useTheme();
+  const styles = useThemedStyles((c) => ({
+    container: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: 0,
+      paddingHorizontal: 18,
+      zIndex: 10,
+    },
+    shadowWrap: {
+      borderRadius: 34,
+      ...Platform.select({
+        ios: {
+          shadowColor: c.shadow,
+          shadowOffset: { width: 0, height: 12 },
+          shadowOpacity: isDark ? 0.42 : 0.18,
+          shadowRadius: 24,
+        },
+        android: {
+          elevation: 18,
+        },
+        default: {},
+      }),
+    },
+    glass: {
+      height: TAB_BAR_HEIGHT,
+      borderRadius: 34,
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(255, 255, 255, 0.14)" : c.border,
+      backgroundColor:
+        Platform.OS === "android"
+          ? isDark
+            ? "rgba(18, 22, 30, 0.88)"
+            : `${c.surfaceElevated}E0`
+          : "transparent",
+    },
+    glassTint: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: isDark
+        ? "rgba(255, 255, 255, 0.06)"
+        : "rgba(255, 255, 255, 0.72)",
+    },
+    tabRow: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 6,
+      paddingVertical: 6,
+    },
+    tabItem: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      minHeight: 50,
+      gap: 3,
+    },
+    selectionPill: {
+      position: "absolute",
+      top: 4,
+      bottom: 4,
+      left: 4,
+      right: 4,
+      borderRadius: 22,
+      backgroundColor: isDark
+        ? "rgba(255, 255, 255, 0.16)"
+        : c.surfaceMuted,
+      borderWidth: 1,
+      borderColor: isDark
+        ? "rgba(255, 255, 255, 0.12)"
+        : c.accentBorder,
+    },
+    tabLabel: {
+      fontSize: 10,
+      fontWeight: "600",
+      letterSpacing: 0.1,
+      color: c.textMuted,
+      maxWidth: "100%",
+      paddingHorizontal: 2,
+    },
+    tabLabelActive: {
+      color: c.textPrimary,
+    },
+  }));
+
+  const iconActiveColor = colors.textPrimary;
+  const iconInactiveColor = colors.iconMuted;
+
   return (
     <View
       pointerEvents="box-none"
       style={[styles.container, { paddingBottom: bottomInset + TAB_BAR_BOTTOM_MARGIN }]}
     >
       <View style={styles.shadowWrap}>
-        <BlurView intensity={Platform.OS === "ios" ? 72 : 48} tint="dark" style={styles.glass}>
+        <BlurView
+          intensity={Platform.OS === "ios" ? 72 : 48}
+          tint={isDark ? "dark" : "light"}
+          style={styles.glass}
+        >
           <View style={styles.glassTint} />
           <View style={styles.tabRow}>
             {tabs.map((tab) => {
@@ -86,7 +176,7 @@ export function LiquidGlassTabBar({
                   <Ionicons
                     name={active ? icons.active : icons.inactive}
                     size={22}
-                    color={active ? "#FFFFFF" : "rgba(235, 240, 255, 0.58)"}
+                    color={active ? iconActiveColor : iconInactiveColor}
                   />
                   <Text
                     style={[styles.tabLabel, active && styles.tabLabelActive]}
@@ -103,77 +193,3 @@ export function LiquidGlassTabBar({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 18,
-    zIndex: 10,
-  },
-  shadowWrap: {
-    borderRadius: 34,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000000",
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.42,
-        shadowRadius: 24,
-      },
-      android: {
-        elevation: 18,
-      },
-      default: {},
-    }),
-  },
-  glass: {
-    height: TAB_BAR_HEIGHT,
-    borderRadius: 34,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.14)",
-    backgroundColor: Platform.OS === "android" ? "rgba(18, 22, 30, 0.88)" : "transparent",
-  },
-  glassTint: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(255, 255, 255, 0.06)",
-  },
-  tabRow: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 6,
-    paddingVertical: 6,
-  },
-  tabItem: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 50,
-    gap: 3,
-  },
-  selectionPill: {
-    position: "absolute",
-    top: 4,
-    bottom: 4,
-    left: 4,
-    right: 4,
-    borderRadius: 22,
-    backgroundColor: "rgba(255, 255, 255, 0.16)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.12)",
-  },
-  tabLabel: {
-    fontSize: 10,
-    fontWeight: "600",
-    letterSpacing: 0.1,
-    color: "rgba(235, 240, 255, 0.58)",
-    maxWidth: "100%",
-    paddingHorizontal: 2,
-  },
-  tabLabelActive: {
-    color: "#FFFFFF",
-  },
-});

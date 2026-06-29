@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { Animated, Easing, StyleSheet, Text, View } from "react-native";
+import { useThemedStyles } from "../hooks/useThemedStyles";
 
 interface Props {
   visible: boolean;
@@ -7,6 +8,67 @@ interface Props {
 }
 
 export function CookingBanner({ visible, subtitle }: Props) {
+  const styles = useThemedStyles((c) => ({
+    wrap: {
+      marginBottom: 10,
+      borderRadius: 14,
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: `${c.warning}55`,
+      backgroundColor: c.surface,
+    },
+    glow: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: c.warning,
+    },
+    inner: {
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+      alignItems: "center",
+    },
+    steamRow: {
+      flexDirection: "row",
+      gap: 10,
+      height: 20,
+      marginBottom: 2,
+    },
+    steam: {
+      color: c.textMuted,
+      fontSize: 18,
+      fontWeight: "700",
+    },
+    emoji: {
+      fontSize: 28,
+      marginBottom: 4,
+    },
+    titleRow: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+    },
+    title: {
+      color: c.textPrimary,
+      fontSize: 16,
+      fontWeight: "800",
+      letterSpacing: 0.3,
+    },
+    dots: {
+      flexDirection: "row",
+      marginBottom: 2,
+    },
+    dot: {
+      color: c.warning,
+      fontSize: 22,
+      fontWeight: "900",
+      lineHeight: 22,
+    },
+    subtitle: {
+      color: c.textMuted,
+      fontSize: 12,
+      marginTop: 4,
+      textAlign: "center",
+    },
+  }));
+
   const pulse = useRef(new Animated.Value(0)).current;
   const steam1 = useRef(new Animated.Value(0)).current;
   const steam2 = useRef(new Animated.Value(0)).current;
@@ -167,64 +229,3 @@ export function CookingBanner({ visible, subtitle }: Props) {
     </Animated.View>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: {
-    marginBottom: 10,
-    borderRadius: 14,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#f0883e55",
-    backgroundColor: "#161b22",
-  },
-  glow: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#f0883e",
-  },
-  inner: {
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    alignItems: "center",
-  },
-  steamRow: {
-    flexDirection: "row",
-    gap: 10,
-    height: 20,
-    marginBottom: 2,
-  },
-  steam: {
-    color: "#8b949e",
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  emoji: {
-    fontSize: 28,
-    marginBottom: 4,
-  },
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-  },
-  title: {
-    color: "#f0f6fc",
-    fontSize: 16,
-    fontWeight: "800",
-    letterSpacing: 0.3,
-  },
-  dots: {
-    flexDirection: "row",
-    marginBottom: 2,
-  },
-  dot: {
-    color: "#f0883e",
-    fontSize: 22,
-    fontWeight: "900",
-    lineHeight: 22,
-  },
-  subtitle: {
-    color: "#8b949e",
-    fontSize: 12,
-    marginTop: 4,
-    textAlign: "center",
-  },
-});

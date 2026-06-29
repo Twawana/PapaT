@@ -9,6 +9,8 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useTheme } from "../context/ThemeContext";
+import { useThemedStyles } from "../hooks/useThemedStyles";
 import { titusClient } from "../services/websocket";
 import { RecentFile } from "../services/recentFiles";
 import { FileSearchHit } from "../types/protocol";
@@ -22,6 +24,72 @@ interface Props {
 }
 
 export function QuickOpenModal({ visible, recentFiles, onClose, onOpen }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles((c) => ({
+    backdrop: {
+      flex: 1,
+      backgroundColor: c.shadow,
+      justifyContent: "flex-start",
+      paddingTop: 80,
+      paddingHorizontal: 16,
+    },
+    sheet: {
+      backgroundColor: c.surface,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.border,
+      padding: 16,
+      maxHeight: "70%",
+    },
+    title: {
+      color: c.textPrimary,
+      fontSize: 18,
+      fontWeight: "700",
+      marginBottom: 12,
+    },
+    input: {
+      backgroundColor: c.background,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 8,
+      color: c.textPrimary,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      fontSize: 15,
+      marginBottom: 12,
+    },
+    loader: {
+      marginBottom: 8,
+    },
+    sectionLabel: {
+      color: c.textMuted,
+      fontSize: 12,
+      fontWeight: "600",
+      marginBottom: 8,
+      textTransform: "uppercase",
+    },
+    row: {
+      paddingVertical: 10,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.border,
+    },
+    rowName: {
+      color: c.textPrimary,
+      fontSize: 15,
+      fontWeight: "600",
+    },
+    rowPath: {
+      color: c.textMuted,
+      fontSize: 12,
+      marginTop: 2,
+    },
+    empty: {
+      color: c.textMuted,
+      paddingVertical: 16,
+      textAlign: "center",
+    },
+  }));
+
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<FileSearchHit[]>([]);
   const [loading, setLoading] = useState(false);
@@ -59,10 +127,13 @@ export function QuickOpenModal({ visible, recentFiles, onClose, onOpen }: Props)
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={() => {
-        dismissKeyboard();
-        onClose();
-      }}>
+      <Pressable
+        style={styles.backdrop}
+        onPress={() => {
+          dismissKeyboard();
+          onClose();
+        }}
+      >
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
           <Text style={styles.title}>Quick Open</Text>
           <TextInput
@@ -70,13 +141,15 @@ export function QuickOpenModal({ visible, recentFiles, onClose, onOpen }: Props)
             value={query}
             onChangeText={setQuery}
             placeholder="Type a file name..."
-            placeholderTextColor="#484f58"
+            placeholderTextColor={colors.placeholder}
             autoCapitalize="none"
             autoCorrect={false}
             autoFocus
           />
 
-          {loading ? <ActivityIndicator color="#58a6ff" style={styles.loader} /> : null}
+          {loading ? (
+            <ActivityIndicator color={colors.accent} style={styles.loader} />
+          ) : null}
 
           {showRecent ? (
             <>
@@ -132,68 +205,3 @@ export function QuickOpenModal({ visible, recentFiles, onClose, onOpen }: Props)
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(1, 4, 9, 0.75)",
-    justifyContent: "flex-start",
-    paddingTop: 80,
-    paddingHorizontal: 16,
-  },
-  sheet: {
-    backgroundColor: "#161b22",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#30363d",
-    padding: 16,
-    maxHeight: "70%",
-  },
-  title: {
-    color: "#f0f6fc",
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 12,
-  },
-  input: {
-    backgroundColor: "#0d1117",
-    borderWidth: 1,
-    borderColor: "#30363d",
-    borderRadius: 8,
-    color: "#f0f6fc",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
-    marginBottom: 12,
-  },
-  loader: {
-    marginBottom: 8,
-  },
-  sectionLabel: {
-    color: "#8b949e",
-    fontSize: 12,
-    fontWeight: "600",
-    marginBottom: 8,
-    textTransform: "uppercase",
-  },
-  row: {
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#30363d",
-  },
-  rowName: {
-    color: "#f0f6fc",
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  rowPath: {
-    color: "#8b949e",
-    fontSize: 12,
-    marginTop: 2,
-  },
-  empty: {
-    color: "#8b949e",
-    paddingVertical: 16,
-    textAlign: "center",
-  },
-});

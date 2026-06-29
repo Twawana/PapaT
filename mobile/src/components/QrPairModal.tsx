@@ -2,11 +2,11 @@ import React, { useState } from "react";
 import {
   Modal,
   Pressable,
-  StyleSheet,
   Text,
   View,
 } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
+import { useThemedStyles } from "../hooks/useThemedStyles";
 import { parsePairQrData } from "../services/credentials";
 
 interface Props {
@@ -17,6 +17,64 @@ interface Props {
 }
 
 export function QrPairModal({ visible, onClose, onScanned, onError }: Props) {
+  const styles = useThemedStyles((c) => ({
+    container: {
+      flex: 1,
+      backgroundColor: c.background,
+      paddingTop: 48,
+      paddingHorizontal: 16,
+    },
+    header: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 12,
+    },
+    title: {
+      color: c.textPrimary,
+      fontSize: 18,
+      fontWeight: "700",
+    },
+    close: {
+      color: c.link,
+      fontWeight: "600",
+    },
+    hint: {
+      color: c.textMuted,
+      fontSize: 14,
+      lineHeight: 20,
+      marginBottom: 16,
+    },
+    camera: {
+      flex: 1,
+      borderRadius: 12,
+      overflow: "hidden",
+      marginBottom: 24,
+    },
+    permissionBox: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 24,
+    },
+    permissionText: {
+      color: c.textSecondary,
+      textAlign: "center",
+      marginBottom: 16,
+      lineHeight: 22,
+    },
+    permissionBtn: {
+      backgroundColor: c.buttonSuccess,
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      borderRadius: 8,
+    },
+    permissionBtnText: {
+      color: c.onPrimary,
+      fontWeight: "700",
+    },
+  }));
+
   const [permission, requestPermission] = useCameraPermissions();
   const [locked, setLocked] = useState(false);
 
@@ -75,61 +133,3 @@ export function QrPairModal({ visible, onClose, onScanned, onError }: Props) {
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#010409",
-    paddingTop: 48,
-    paddingHorizontal: 16,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  title: {
-    color: "#f0f6fc",
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  close: {
-    color: "#58a6ff",
-    fontWeight: "600",
-  },
-  hint: {
-    color: "#8b949e",
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 16,
-  },
-  camera: {
-    flex: 1,
-    borderRadius: 12,
-    overflow: "hidden",
-    marginBottom: 24,
-  },
-  permissionBox: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-  },
-  permissionText: {
-    color: "#c9d1d9",
-    textAlign: "center",
-    marginBottom: 16,
-    lineHeight: 22,
-  },
-  permissionBtn: {
-    backgroundColor: "#238636",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  permissionBtnText: {
-    color: "#fff",
-    fontWeight: "700",
-  },
-});

@@ -26,6 +26,19 @@ export interface BrowseEntry {
 
 export type EditorId = "cursor" | "vscode";
 
+export type AgentProviderId = "cursor" | "claude" | "copilot" | "augment" | "openai";
+
+export interface AgentProviderStatus {
+  id: AgentProviderId;
+  label: string;
+  description: string;
+  installed: boolean;
+  authenticated: boolean;
+  statusMessage: string;
+  isActive: boolean;
+  installPath?: string | null;
+}
+
 export interface AgentToolCallInfo {
   id: string;
   name: string;
@@ -66,6 +79,16 @@ export interface AgentSessionSummary {
   title: string;
   updatedAt: number;
   messageCount: number;
+  running?: boolean;
+}
+
+export interface AgentRunStatus {
+  sessionId: string;
+  running: boolean;
+  canRetry: boolean;
+  lastError?: string;
+  lastRequestId?: string;
+  updatedAt: number;
 }
 
 export type ExecuteLanguage = "javascript" | "python" | "typescript" | "shell";
@@ -165,6 +188,25 @@ export type ClientMessage =
   | { type: "agent_history"; id: string; sessionId: string }
   | { type: "agent_clear"; id: string; sessionId: string }
   | { type: "agent_sessions"; id: string }
+  | { type: "agent_providers"; id: string; force?: boolean }
+  | { type: "agent_set_provider"; id: string; providerId: AgentProviderId }
+  | {
+      type: "agent_set_credentials";
+      id: string;
+      providerId: AgentProviderId;
+      apiKey?: string | null;
+    }
+  | {
+      type: "agent_set_install_path";
+      id: string;
+      providerId: AgentProviderId;
+      installPath?: string | null;
+    }
+  | { type: "agent_logout"; id: string; providerId: AgentProviderId }
+  | { type: "agent_login_start"; id: string; providerId: AgentProviderId }
+  | { type: "agent_login_cancel"; id: string; providerId: AgentProviderId }
+  | { type: "agent_status"; id: string; sessionId?: string }
+  | { type: "agent_retry"; id: string; sessionId: string }
   | { type: "vscode_get_status"; id: string }
   | { type: "vscode_open_file"; id: string; path: string }
   | { type: "auth"; token: string }
@@ -280,6 +322,45 @@ export type ServerMessage =
       type: "agent_sessions_result";
       id: string;
       sessions: AgentSessionSummary[];
+    }
+  | {
+      type: "agent_providers_result";
+      id: string;
+      providers: AgentProviderStatus[];
+      activeProviderId: AgentProviderId;
+    }
+  | {
+      type: "agent_provider_changed";
+      activeProviderId: AgentProviderId;
+      providers: AgentProviderStatus[];
+    }
+  | {
+      type: "agent_credentials_result";
+      id: string;
+      message: string;
+      activeProviderId: AgentProviderId;
+      providers: AgentProviderStatus[];
+    }
+  | {
+      type: "agent_login_result";
+      id: string;
+      providerId: AgentProviderId;
+      loginUrl: string;
+      message: string;
+    }
+  | {
+      type: "agent_login_complete";
+      providerId: AgentProviderId;
+      success: boolean;
+      message: string;
+      activeProviderId: AgentProviderId;
+      providers: AgentProviderStatus[];
+    }
+  | { type: "agent_ack"; id: string; sessionId: string; message: string }
+  | {
+      type: "agent_status_result";
+      id: string;
+      sessions: AgentRunStatus[];
     }
   | {
       type: "agent_error";

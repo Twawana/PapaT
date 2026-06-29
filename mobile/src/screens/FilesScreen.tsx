@@ -7,7 +7,6 @@ import {
   Platform,
   Pressable,
   RefreshControl,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -22,8 +21,10 @@ import {
   parentPath,
   pathLabel,
 } from "../utils/paths";
+import { useTheme } from "../context/ThemeContext";
 import { copyPathToClipboard } from "../utils/clipboard";
 import { useTabBarInset } from "../hooks/useTabBarInset";
+import { useThemedStyles } from "../hooks/useThemedStyles";
 
 interface Props {
   isConnected: boolean;
@@ -83,6 +84,314 @@ export default function FilesScreen({
   onError,
   onOpenInEditor,
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles((c) => ({
+    container: {
+      flex: 1,
+    },
+    list: {
+      flex: 1,
+    },
+    toolbar: {
+      marginBottom: 8,
+    },
+    toolbarInfo: {
+      marginBottom: 8,
+    },
+    sectionTitle: {
+      color: c.textSecondary,
+      fontWeight: "600",
+      fontSize: 14,
+    },
+    workspacePath: {
+      color: c.textMuted,
+      fontSize: 11,
+      marginTop: 2,
+    },
+    toolbarActions: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    toolBtn: {
+      backgroundColor: c.buttonSecondary,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    toolBtnText: {
+      color: c.textSecondary,
+      fontSize: 12,
+      fontWeight: "600",
+    },
+    breadcrumb: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      alignItems: "center",
+      marginBottom: 4,
+    },
+    crumb: {
+      color: c.link,
+      fontSize: 13,
+    },
+    crumbActive: {
+      color: c.textPrimary,
+      fontWeight: "600",
+    },
+    crumbMuted: {
+      color: c.textMuted,
+      fontSize: 13,
+    },
+    crumbSep: {
+      color: c.placeholder,
+      fontSize: 13,
+    },
+    hint: {
+      color: c.textMuted,
+      fontSize: 11,
+      marginBottom: 8,
+    },
+    loader: {
+      marginTop: 24,
+    },
+    empty: {
+      color: c.textMuted,
+      textAlign: "center",
+      marginTop: 24,
+      fontSize: 14,
+    },
+    row: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 12,
+      paddingHorizontal: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: c.surfaceMuted,
+    },
+    rowIcon: {
+      fontSize: 18,
+      marginRight: 10,
+    },
+    rowBody: {
+      flex: 1,
+    },
+    rowName: {
+      color: c.textPrimary,
+      fontSize: 15,
+    },
+    rowMeta: {
+      color: c.textMuted,
+      fontSize: 12,
+      marginTop: 2,
+    },
+    backBtn: {
+      alignSelf: "flex-start",
+      marginTop: 8,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+    },
+    backBtnText: {
+      color: c.link,
+      fontWeight: "600",
+    },
+    editorModal: {
+      flex: 1,
+      backgroundColor: c.background,
+      paddingTop: Platform.OS === "ios" ? 48 : 24,
+      paddingHorizontal: 16,
+    },
+    editorHeader: {
+      marginBottom: 12,
+    },
+    editorTitle: {
+      color: c.textSecondary,
+      fontSize: 14,
+      marginBottom: 8,
+    },
+    editorActions: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    editorBtn: {
+      backgroundColor: c.buttonSecondary,
+      borderRadius: 8,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    editorBtnText: {
+      color: c.textSecondary,
+      fontWeight: "600",
+    },
+    saveBtn: {
+      backgroundColor: c.buttonSuccess,
+      borderColor: c.buttonSuccess,
+    },
+    saveBtnText: {
+      color: c.onPrimary,
+      fontWeight: "700",
+    },
+    editor: {
+      flex: 1,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 8,
+      padding: 12,
+      color: c.textSecondary,
+      fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+      fontSize: 13,
+      lineHeight: 20,
+      marginBottom: 16,
+    },
+    btnDisabled: {
+      opacity: 0.5,
+    },
+    promptOverlay: {
+      flex: 1,
+      backgroundColor: `${c.shadow}99`,
+      justifyContent: "center",
+      padding: 24,
+    },
+    promptCard: {
+      backgroundColor: c.surfaceElevated,
+      borderRadius: 12,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    promptTitle: {
+      color: c.textPrimary,
+      fontSize: 16,
+      fontWeight: "600",
+      marginBottom: 12,
+    },
+    promptInput: {
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      color: c.textSecondary,
+      marginBottom: 12,
+    },
+    promptActions: {
+      flexDirection: "row",
+      justifyContent: "flex-end",
+      gap: 8,
+    },
+    promptBtn: {
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 8,
+      backgroundColor: c.buttonSecondary,
+    },
+    promptBtnText: {
+      color: c.textSecondary,
+      fontWeight: "600",
+    },
+    promptBtnPrimary: {
+      backgroundColor: c.buttonSuccess,
+    },
+    promptBtnPrimaryText: {
+      color: c.onPrimary,
+      fontWeight: "700",
+    },
+    browseModal: {
+      flex: 1,
+      backgroundColor: c.background,
+      paddingTop: Platform.OS === "ios" ? 48 : 24,
+      paddingHorizontal: 16,
+    },
+    browseHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 12,
+    },
+    browseTitle: {
+      color: c.textPrimary,
+      fontSize: 18,
+      fontWeight: "700",
+      flex: 1,
+      marginRight: 8,
+    },
+    browseClose: {
+      color: c.link,
+      fontWeight: "600",
+    },
+    rootRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 12,
+    },
+    rootChip: {
+      backgroundColor: c.buttonSecondary,
+      borderRadius: 16,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    rootChipText: {
+      color: c.textSecondary,
+      fontSize: 12,
+      fontWeight: "600",
+    },
+    browsePath: {
+      color: c.textMuted,
+      fontSize: 12,
+      marginBottom: 8,
+    },
+    browseRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: c.surfaceMuted,
+    },
+    browseRowIcon: {
+      fontSize: 16,
+      marginRight: 10,
+    },
+    browseRowName: {
+      color: c.textPrimary,
+      fontSize: 15,
+    },
+    browseFooter: {
+      flexDirection: "row",
+      gap: 8,
+      paddingVertical: 12,
+    },
+    browseFooterBtn: {
+      flex: 1,
+      backgroundColor: c.buttonSecondary,
+      borderRadius: 8,
+      paddingVertical: 12,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    browseFooterText: {
+      color: c.textSecondary,
+      fontWeight: "600",
+    },
+    browseSelectBtn: {
+      backgroundColor: c.buttonSuccess,
+      borderColor: c.buttonSuccess,
+      flex: 2,
+    },
+    browseSelectText: {
+      color: c.onPrimary,
+      fontWeight: "700",
+    },
+  }));
   const [currentPath, setCurrentPath] = useState(".");
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -560,7 +869,7 @@ export default function FilesScreen({
       </Text>
 
       {loading && !refreshing ? (
-        <ActivityIndicator color="#58a6ff" style={styles.loader} />
+        <ActivityIndicator color={colors.iconAccent} style={styles.loader} />
       ) : (
         <FlatList
           data={entries}
@@ -574,7 +883,7 @@ export default function FilesScreen({
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => loadDirectory(currentPath, true)}
-              tintColor="#58a6ff"
+              tintColor={colors.iconAccent}
             />
           }
           ListEmptyComponent={
@@ -677,7 +986,7 @@ export default function FilesScreen({
               value={promptName}
               onChangeText={setPromptName}
               placeholder="name"
-              placeholderTextColor="#484f58"
+              placeholderTextColor={colors.placeholder}
               autoCapitalize="none"
               autoCorrect={false}
               autoFocus
@@ -731,7 +1040,7 @@ export default function FilesScreen({
           </Text>
 
           {browseLoading ? (
-            <ActivityIndicator color="#58a6ff" style={styles.loader} />
+            <ActivityIndicator color={colors.iconAccent} style={styles.loader} />
           ) : (
             <FlatList
               data={browseEntries}
@@ -790,7 +1099,7 @@ export default function FilesScreen({
           </Text>
 
           {moveDestLoading ? (
-            <ActivityIndicator color="#58a6ff" style={styles.loader} />
+            <ActivityIndicator color={colors.iconAccent} style={styles.loader} />
           ) : (
             <FlatList
               data={moveDestEntries}
@@ -823,311 +1132,3 @@ export default function FilesScreen({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  list: {
-    flex: 1,
-  },
-  toolbar: {
-    marginBottom: 8,
-  },
-  toolbarInfo: {
-    marginBottom: 8,
-  },
-  sectionTitle: {
-    color: "#c9d1d9",
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  workspacePath: {
-    color: "#6e7681",
-    fontSize: 11,
-    marginTop: 2,
-  },
-  toolbarActions: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  toolBtn: {
-    backgroundColor: "#21262d",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: "#30363d",
-  },
-  toolBtnText: {
-    color: "#c9d1d9",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  breadcrumb: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  crumb: {
-    color: "#58a6ff",
-    fontSize: 13,
-  },
-  crumbActive: {
-    color: "#f0f6fc",
-    fontWeight: "600",
-  },
-  crumbMuted: {
-    color: "#6e7681",
-    fontSize: 13,
-  },
-  crumbSep: {
-    color: "#484f58",
-    fontSize: 13,
-  },
-  hint: {
-    color: "#6e7681",
-    fontSize: 11,
-    marginBottom: 8,
-  },
-  loader: {
-    marginTop: 24,
-  },
-  empty: {
-    color: "#8b949e",
-    textAlign: "center",
-    marginTop: 24,
-    fontSize: 14,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#21262d",
-  },
-  rowIcon: {
-    fontSize: 18,
-    marginRight: 10,
-  },
-  rowBody: {
-    flex: 1,
-  },
-  rowName: {
-    color: "#f0f6fc",
-    fontSize: 15,
-  },
-  rowMeta: {
-    color: "#8b949e",
-    fontSize: 12,
-    marginTop: 2,
-  },
-  backBtn: {
-    alignSelf: "flex-start",
-    marginTop: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  backBtnText: {
-    color: "#58a6ff",
-    fontWeight: "600",
-  },
-  editorModal: {
-    flex: 1,
-    backgroundColor: "#010409",
-    paddingTop: Platform.OS === "ios" ? 48 : 24,
-    paddingHorizontal: 16,
-  },
-  editorHeader: {
-    marginBottom: 12,
-  },
-  editorTitle: {
-    color: "#c9d1d9",
-    fontSize: 14,
-    marginBottom: 8,
-  },
-  editorActions: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  editorBtn: {
-    backgroundColor: "#21262d",
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: "#30363d",
-  },
-  editorBtnText: {
-    color: "#c9d1d9",
-    fontWeight: "600",
-  },
-  saveBtn: {
-    backgroundColor: "#238636",
-    borderColor: "#238636",
-  },
-  saveBtnText: {
-    color: "#fff",
-    fontWeight: "700",
-  },
-  editor: {
-    flex: 1,
-    backgroundColor: "#0d1117",
-    borderWidth: 1,
-    borderColor: "#30363d",
-    borderRadius: 8,
-    padding: 12,
-    color: "#c9d1d9",
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    fontSize: 13,
-    lineHeight: 20,
-    marginBottom: 16,
-  },
-  btnDisabled: {
-    opacity: 0.5,
-  },
-  promptOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "center",
-    padding: 24,
-  },
-  promptCard: {
-    backgroundColor: "#161b22",
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#30363d",
-  },
-  promptTitle: {
-    color: "#f0f6fc",
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 12,
-  },
-  promptInput: {
-    backgroundColor: "#0d1117",
-    borderWidth: 1,
-    borderColor: "#30363d",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: "#c9d1d9",
-    marginBottom: 12,
-  },
-  promptActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 8,
-  },
-  promptBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: "#21262d",
-  },
-  promptBtnText: {
-    color: "#c9d1d9",
-    fontWeight: "600",
-  },
-  promptBtnPrimary: {
-    backgroundColor: "#238636",
-  },
-  promptBtnPrimaryText: {
-    color: "#fff",
-    fontWeight: "700",
-  },
-  browseModal: {
-    flex: 1,
-    backgroundColor: "#010409",
-    paddingTop: Platform.OS === "ios" ? 48 : 24,
-    paddingHorizontal: 16,
-  },
-  browseHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  browseTitle: {
-    color: "#f0f6fc",
-    fontSize: 18,
-    fontWeight: "700",
-    flex: 1,
-    marginRight: 8,
-  },
-  browseClose: {
-    color: "#58a6ff",
-    fontWeight: "600",
-  },
-  rootRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 12,
-  },
-  rootChip: {
-    backgroundColor: "#21262d",
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: "#30363d",
-  },
-  rootChipText: {
-    color: "#c9d1d9",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  browsePath: {
-    color: "#8b949e",
-    fontSize: 12,
-    marginBottom: 8,
-  },
-  browseRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#21262d",
-  },
-  browseRowIcon: {
-    fontSize: 16,
-    marginRight: 10,
-  },
-  browseRowName: {
-    color: "#f0f6fc",
-    fontSize: 15,
-  },
-  browseFooter: {
-    flexDirection: "row",
-    gap: 8,
-    paddingVertical: 12,
-  },
-  browseFooterBtn: {
-    flex: 1,
-    backgroundColor: "#21262d",
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#30363d",
-  },
-  browseFooterText: {
-    color: "#c9d1d9",
-    fontWeight: "600",
-  },
-  browseSelectBtn: {
-    backgroundColor: "#238636",
-    borderColor: "#238636",
-    flex: 2,
-  },
-  browseSelectText: {
-    color: "#fff",
-    fontWeight: "700",
-  },
-});

@@ -3,7 +3,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  StyleSheet,
   Text,
   View,
 } from "react-native";
@@ -11,6 +10,9 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { StatusBar } from "expo-status-bar";
 import { ConnectionBar } from "../components/ConnectionBar";
 import { ErrorBoundary } from "../components/ErrorBoundary";
+import { ThemeToggle } from "../components/ThemeToggle";
+import { useTheme } from "../context/ThemeContext";
+import { useThemedStyles } from "../hooks/useThemedStyles";
 import {
   LiquidGlassTabBar,
 } from "../components/LiquidGlassTabBar";
@@ -25,6 +27,7 @@ import {
 import { useConnection } from "../hooks/useConnection";
 import { useNavigationTabs } from "../hooks/useNavigationTabs";
 import { titusClient } from "../services/websocket";
+import { ThemeColors } from "../theme/colors";
 
 interface EditorActions {
   openFile: (path: string) => Promise<void>;
@@ -47,7 +50,10 @@ function EditorActionBridge({
 }
 
 export default function MainScreen() {
+  const { isDark } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const [workspaceName, setWorkspaceName] = useState("workspace");
+  const [connectionDetailsVisible, setConnectionDetailsVisible] = useState(true);
   const connection = useConnection();
   const insets = useSafeAreaInsets();
   const editorActionsRef = useRef<EditorActions>({
@@ -167,20 +173,24 @@ export default function MainScreen() {
 
   const keyboardVisible = useKeyboardVisible();
   const contentInset = keyboardVisible ? insets.bottom : 0;
+  const showHeaderExtras = !connection.isConnected || connectionDetailsVisible;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <EditorActionBridge actionsRef={editorActionsRef} />
-      <StatusBar style="light" />
+      <StatusBar style={isDark ? "light" : "dark"} />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={keyboardAvoidBehavior()}
         keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
       >
         <KeyboardDismissView style={styles.flex}>
-        <Pressable style={styles.header} onPress={dismissKeyboard}>
-          <Text style={styles.title}>Titus</Text>
-        </Pressable>
+        <View style={styles.header}>
+          <Pressable style={styles.titleWrap} onPress={dismissKeyboard}>
+            <Text style={styles.title}>Titus</Text>
+          </Pressable>
+          {showHeaderExtras ? <ThemeToggle /> : null}
+        </View>
 
         <ConnectionBar
           host={connection.host}
@@ -199,6 +209,8 @@ export default function MainScreen() {
           onPairWithCode={connection.handlePairWithCode}
           onForgetDevice={connection.handleForgetDevice}
           onError={connection.setError}
+          detailsVisible={connectionDetailsVisible}
+          onDetailsVisibleChange={setConnectionDetailsVisible}
         />
 
         <View style={[styles.content, { paddingBottom: contentInset }]}>
@@ -238,31 +250,40 @@ export default function MainScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: "#010409",
-  },
-  flex: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  header: {
-    paddingTop: 8,
-    paddingBottom: 12,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: "#f0f6fc",
-  },
-  content: {
-    flex: 1,
-  },
-  panel: {
-    flex: 1,
-  },
-  panelHidden: {
-    display: "none",
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return {
+    safe: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    flex: {
+      flex: 1,
+      paddingHorizontal: 16,
+    },
+    header: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+      paddingTop: 8,
+      paddingBottom: 12,
+      gap: 12,
+    },
+    titleWrap: {
+      flex: 1,
+    },
+    title: {
+      fontSize: 28,
+      fontWeight: "700" as const,
+      color: colors.textPrimary,
+    },
+    content: {
+      flex: 1,
+    },
+    panel: {
+      flex: 1,
+    },
+    panelHidden: {
+      display: "none" as const,
+    },
+  };
+}
