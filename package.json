@@ -1,0 +1,66 @@
+{
+  "name": "papat",
+  "version": "1.0.0",
+  "description": "PapaT desktop app",
+  "main": "main.js",
+  "author": "PapaT",
+  "scripts": {
+    "prestart": "npm run build:host",
+    "start": "electron .",
+    "build:host": "npm run build --prefix host-server",
+    "prebuild": "npm run build:host",
+    "build": "electron-builder",
+    "build:dir": "npm run build:host && electron-builder --dir"
+  },
+  "devDependencies": {
+    "electron": "^43.0.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.papat.app",
+    "productName": "PapaT",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "desktop-ui/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "host-server/dist",
+        "to": "host-server/dist",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "host-server/node_modules",
+        "to": "host-server/node_modules",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "host-server/workspace",
+        "to": "host-server/workspace",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "host-server/package.json",
+        "to": "host-server/package.json"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

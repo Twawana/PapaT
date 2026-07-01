@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PapaT</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0f1117;
+        --panel: #171b26;
+        --text: #eef1f8;
+        --muted: #9aa3b8;
+        --accent: #6ea8fe;
+        --ok: #3ddc84;
+        --warn: #ffb020;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+        background: radial-gradient(circle at top, #1a2238 0%, var(--bg) 55%);
+        color: var(--text);
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+
+      .card {
+        width: min(720px, 100%);
+        background: color-mix(in srgb, var(--panel) 92%, white 8%);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 18px;
+        padding: 28px 32px;
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 2rem;
+        letter-spacing: -0.02em;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      .status {
+        margin-top: 24px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px 16px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.04);
+      }
+
+      .label {
+        font-weight: 600;
+      }
+
+      .pill {
+        font-size: 0.85rem;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .pill.ok {
+        color: var(--ok);
+        background: rgba(61, 220, 132, 0.12);
+      }
+
+      .pill.warn {
+        color: var(--warn);
+        background: rgba(255, 176, 32, 0.12);
+      }
+
+      .steps {
+        margin-top: 24px;
+        padding-left: 20px;
+        color: var(--muted);
+      }
+
+      .steps li + li {
+        margin-top: 8px;
+      }
+
+      code {
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>PapaT</h1>
+      <p>Your PC host is running. Connect the PapaT mobile app to control this machine.</p>
+
+      <section class="status" aria-live="polite">
+        <div class="row">
+          <span class="label">Desktop UI</span>
+          <span class="pill ok" id="ui-status">Running</span>
+        </div>
+        <div class="row">
+          <span class="label">Backend host</span>
+          <span class="pill warn" id="backend-status">Checking…</span>
+        </div>
+        <div class="row">
+          <span class="label">WebSocket</span>
+          <span class="pill" id="ws-endpoint">ws://127.0.0.1:3847</span>
+        </div>
+      </section>
+
+      <ol class="steps">
+        <li>Open the PapaT app on your phone.</li>
+        <li>Scan the pairing QR code shown in the backend terminal, or enter your PC IP and port <code>3847</code>.</li>
+        <li>Keep this window open while you work — closing it stops the host server.</li>
+      </ol>
+    </main>
+
+    <script>
+      const BACKEND_PORT = 3847;
+      const wsEndpoint = document.getElementById("ws-endpoint");
+      const backendStatus = document.getElementById("backend-status");
+
+      wsEndpoint.textContent = `ws://127.0.0.1:${BACKEND_PORT}`;
+
+      function setBackendStatus(ok, text) {
+        backendStatus.textContent = text;
+        backendStatus.className = "pill " + (ok ? "ok" : "warn");
+      }
+
+      function checkBackend() {
+        const ws = new WebSocket(`ws://127.0.0.1:${BACKEND_PORT}`);
+
+        const timeout = setTimeout(() => {
+          ws.close();
+          setBackendStatus(false, "Starting…");
+        }, 4000);
+
+        ws.onopen = () => {
+          clearTimeout(timeout);
+          setBackendStatus(true, "Online");
+          ws.close();
+        };
+
+        ws.onerror = () => {
+          clearTimeout(timeout);
+          setBackendStatus(false, "Offline");
+        };
+      }
+
+      checkBackend();
+      setInterval(checkBackend, 5000);
+    </script>
+  </body>
+</html>

@@ -105,8 +105,10 @@ export async function refreshAgentProviders(options?: {
   providers: AgentProviderStatus[];
   activeProviderId: AgentProviderId;
 }> {
-  clearCursorAuthCache();
-  clearCliAuthCache();
+  if (options?.force) {
+    clearCursorAuthCache();
+    clearCliAuthCache();
+  }
   return {
     providers: await probeAgentProviders(options),
     activeProviderId: getActiveAgentProviderId(),

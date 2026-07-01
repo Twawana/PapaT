@@ -1,4 +1,5 @@
 import { AgentProviderId, ClientMessage, EditorId, ExecuteLanguage, ServerMessage, ShellKind } from "../types/protocol";
+import { buildWebSocketUrl, formatConnectionError } from "../config/api";
 import { errorMessage } from "../utils/errors";
 
 type MessageHandler = (message: ServerMessage) => void;
@@ -64,10 +65,10 @@ export class TitusClient {
   connect(host: string, port: number, options: ConnectOptions = {}): void {
     this.disconnect();
 
-    const trimmed = host.trim().replace(/^ws:\/\//, "");
+    const trimmed = host.trim().replace(/^ws:\/\//, "").replace(/^wss:\/\//, "");
     this.lastConnectHost = trimmed;
     this.lastConnectPort = port;
-    this.url = `ws://${trimmed}:${port}`;
+    this.url = buildWebSocketUrl(trimmed, port);
     this.authenticated = false;
     this.pendingConnect = options;
 
@@ -119,7 +120,7 @@ export class TitusClient {
     };
 
     ws.onerror = () => {
-      this.emitStatus("error", `Cannot reach ${this.url}`);
+      this.emitStatus("error", formatConnectionError(trimmed, port));
     };
 
     ws.onclose = () => {
@@ -321,9 +322,12 @@ export class TitusClient {
     Extract<ServerMessage, { type: "agent_providers_result" }>
   > {
     const id = createRequestId("agent-providers");
-    return this.request(id, { type: "agent_providers", id, force }, [
-      "agent_providers_result",
-    ]);
+    return this.request(
+      id,
+      { type: "agent_providers", id, force },
+      ["agent_providers_result"],
+      force ? 90_000 : 30_000
+    );
   }
 
   setAgentProvider(

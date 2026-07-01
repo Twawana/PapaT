@@ -26,6 +26,7 @@ import {
 import { AgentProviderDefinition, AgentProviderRunContext } from "./types";
 
 const AUTH_CACHE_TTL_MS = 10 * 60 * 1000;
+const PROBE_AUTH_TIMEOUT_MS = 12_000;
 let authCache: { ok: boolean; message: string; expiresAt: number } | null = null;
 
 function cacheAuth(ok: boolean, message: string): void {
@@ -190,7 +191,7 @@ export const claudeProvider: AgentProviderDefinition = {
   id: "claude",
   label: "Claude Code",
   description: "Anthropic Claude Code CLI",
-  async probe() {
+  async probe(options) {
     const command = resolveProviderCliCommand("claude");
     if (!command) {
       return {
@@ -205,13 +206,13 @@ export const claudeProvider: AgentProviderDefinition = {
     }
 
     try {
-      const { stdout, stderr, code } = await runCli(command, ["--version"], {
-        timeoutMs: 15_000,
+      const { stdout, stderr } = await runCli(command, ["--version"], {
+        timeoutMs: 10_000,
       });
       const version = `${stdout}\n${stderr}`.trim().split(/\r?\n/)[0] || "installed";
 
       const authCheck = await runCli(command, ["auth", "status"], {
-        timeoutMs: 15_000,
+        timeoutMs: PROBE_AUTH_TIMEOUT_MS,
       });
       const authOutput = `${authCheck.stdout}\n${authCheck.stderr}`.trim();
       const auth = parseClaudeAuthStatus(authOutput, authCheck.code);
@@ -270,7 +271,7 @@ export const copilotProvider: AgentProviderDefinition = {
   id: "copilot",
   label: "GitHub Copilot",
   description: "GitHub Copilot CLI",
-  async probe() {
+  async probe(options) {
     const command = resolveProviderCliCommand("copilot");
     if (!command) {
       return {
@@ -285,14 +286,29 @@ export const copilotProvider: AgentProviderDefinition = {
     }
 
     try {
-      const { stdout, stderr, code } = await runCli(command, ["--version"], {
-        timeoutMs: 15_000,
+      const { stdout, stderr } = await runCli(command, ["--version"], {
+        timeoutMs: 10_000,
       });
       const version = `${stdout}\n${stderr}`.trim().split(/\r?\n/)[0] || "installed";
+
+      if (!options?.force) {
+        return {
+          id: "copilot",
+          label: "GitHub Copilot",
+          description: "GitHub Copilot CLI",
+          installed: true,
+          authenticated: false,
+          statusMessage:
+            `${version} · Tap Refresh status to verify sign-in` +
+            (installPathStatusSuffix("copilot") ?? ""),
+          installPath: getProviderInstallPath("copilot"),
+        };
+      }
+
       const authCheck = await runCli(
         command,
         ["-p", "Reply with exactly: ok", "-s", "--no-ask-user"],
-        { timeoutMs: 45_000 }
+        { timeoutMs: PROBE_AUTH_TIMEOUT_MS }
       );
       const authOutput = `${authCheck.stdout}\n${authCheck.stderr}`.trim();
       const authenticated = !looksUnauthenticated(authOutput, authCheck.code);
@@ -345,7 +361,7 @@ export const augmentProvider: AgentProviderDefinition = {
   id: "augment",
   label: "Augment",
   description: "Augment Auggie CLI",
-  async probe() {
+  async probe(options) {
     const command = resolveProviderCliCommand("augment");
     if (!command) {
       return {
@@ -361,13 +377,28 @@ export const augmentProvider: AgentProviderDefinition = {
 
     try {
       const { stdout, stderr } = await runCli(command, ["--version"], {
-        timeoutMs: 15_000,
+        timeoutMs: 10_000,
       });
       const version = `${stdout}\n${stderr}`.trim().split(/\r?\n/)[0] || "installed";
+
+      if (!options?.force) {
+        return {
+          id: "augment",
+          label: "Augment",
+          description: "Augment Auggie CLI",
+          installed: true,
+          authenticated: false,
+          statusMessage:
+            `${version} · Tap Refresh status to verify sign-in` +
+            (installPathStatusSuffix("augment") ?? ""),
+          installPath: getProviderInstallPath("augment"),
+        };
+      }
+
       const authCheck = await runCli(
         command,
         ["--print", "--quiet", "Reply with exactly: ok"],
-        { timeoutMs: 45_000 }
+        { timeoutMs: PROBE_AUTH_TIMEOUT_MS }
       );
       const authOutput = `${authCheck.stdout}\n${authCheck.stderr}`.trim();
       const authenticated = !looksUnauthenticated(authOutput, authCheck.code);

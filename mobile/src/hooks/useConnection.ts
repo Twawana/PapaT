@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { Platform } from "react-native";
+import {
+  DEFAULT_HOST,
+  DEFAULT_PORT,
+  formatConnectionError,
+  isLocalhostHost,
+} from "../config/api";
 import { titusClient } from "../services/websocket";
 import {
   clearCredentials,
@@ -8,10 +14,6 @@ import {
 } from "../services/credentials";
 import { ConnectionStatus } from "../types/protocol";
 import { errorMessage } from "../utils/errors";
-
-const DEFAULT_HOST =
-  __DEV__ && Platform.OS === "android" ? "10.0.2.2" : "localhost";
-const DEFAULT_PORT = "3847";
 
 export function useConnection() {
   const [host, setHost] = useState(DEFAULT_HOST);
@@ -65,7 +67,14 @@ export function useConnection() {
         setVscodeConnected(false);
       } else if (status === "error") {
         setConnectionStatus("error");
-        setError(detail ?? "Connection failed");
+        const target = titusClient.getConnectTarget();
+        setError(
+          formatConnectionError(
+            target.host,
+            target.port,
+            detail ?? "Connection failed"
+          )
+        );
       }
     });
 
@@ -132,6 +141,13 @@ export function useConnection() {
         setConnectionStatus("error");
         return;
       }
+      if (isLocalhostHost(host) && Platform.OS !== "web") {
+        setError(
+          "localhost won't work on a phone. Use your PC's Wi-Fi IP address instead."
+        );
+        setConnectionStatus("error");
+        return;
+      }
 
       titusClient.connect(host, portNum, {
         token: options.token,
@@ -180,6 +196,13 @@ export function useConnection() {
       const portNum = parseInt(port, 10);
       if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
         setError("Invalid port number");
+        setConnectionStatus("error");
+        return;
+      }
+      if (isLocalhostHost(host) && Platform.OS !== "web") {
+        setError(
+          "localhost won't work on a phone. Use your PC's Wi-Fi IP address instead."
+        );
         setConnectionStatus("error");
         return;
       }

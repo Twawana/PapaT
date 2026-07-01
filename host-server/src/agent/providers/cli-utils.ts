@@ -12,6 +12,21 @@ export interface RunCliOptions {
   onStdout?: (chunk: string) => void;
 }
 
+const PATH_LOOKUP_TIMEOUT_MS = 5_000;
+
+function execLookupSync(command: string, args: string[]): string | null {
+  try {
+    return execFileSync(command, args, {
+      encoding: "utf8",
+      timeout: PATH_LOOKUP_TIMEOUT_MS,
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+  } catch {
+    return null;
+  }
+}
+
 export function findCommandOnPath(candidates: string[]): string | null {
   for (const candidate of candidates) {
     if (candidate.includes(path.sep) && fs.existsSync(candidate)) {
@@ -21,34 +36,22 @@ export function findCommandOnPath(candidates: string[]): string | null {
 
   if (process.platform === "win32") {
     for (const name of candidates.filter((item) => !item.includes(path.sep))) {
-      try {
-        const found = execFileSync("where.exe", [name], {
-          encoding: "utf8",
-          windowsHide: true,
-          stdio: ["ignore", "pipe", "ignore"],
-        })
-          .split(/\r?\n/)
-          .map((line) => line.trim())
-          .filter((line) => line && fs.existsSync(line));
-        if (found.length) {
-          return pickBestWindowsCliMatch(found);
-        }
-      } catch {
-        // not on PATH
+      const output = execLookupSync("where.exe", [name]);
+      if (!output) continue;
+
+      const found = output
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line && fs.existsSync(line));
+      if (found.length) {
+        return pickBestWindowsCliMatch(found);
       }
     }
   } else {
     for (const name of candidates.filter((item) => !item.includes(path.sep))) {
-      try {
-        const found = execFileSync("which", [name], {
-          encoding: "utf8",
-          stdio: ["ignore", "pipe", "ignore"],
-        }).trim();
-        if (found) {
-          return found;
-        }
-      } catch {
-        // not on PATH
+      const found = execLookupSync("which", [name])?.trim();
+      if (found) {
+        return found;
       }
     }
   }

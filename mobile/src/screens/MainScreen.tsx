@@ -9,6 +9,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { ConnectionBar } from "../components/ConnectionBar";
+import { ServerOfflinePanel } from "../components/ServerOfflinePanel";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { useTheme } from "../context/ThemeContext";
@@ -214,22 +215,26 @@ export default function MainScreen() {
         />
 
         <View style={[styles.content, { paddingBottom: contentInset }]}>
-          {navigation.tabs.map((tab) => (
-            <View
-              key={tab.id}
-              style={
-                navigation.activeTab === tab.id ? styles.panel : styles.panelHidden
-              }
-            >
-              <ErrorBoundary
-                title={resolveTabLabel(tab, navContext)}
-                resetKey={`${tab.id}-${navigation.activeTab === tab.id ? "active" : "idle"}`}
-                onError={(error) => connection.setError(error.message)}
+          {connection.isConnected ? (
+            navigation.tabs.map((tab) => (
+              <View
+                key={tab.id}
+                style={
+                  navigation.activeTab === tab.id ? styles.panel : styles.panelHidden
+                }
               >
-                {tab.render(navContext)}
-              </ErrorBoundary>
-            </View>
-          ))}
+                <ErrorBoundary
+                  title={resolveTabLabel(tab, navContext)}
+                  resetKey={`${tab.id}-${navigation.activeTab === tab.id ? "active" : "idle"}`}
+                  onError={(error) => connection.setError(error.message)}
+                >
+                  {tab.render(navContext)}
+                </ErrorBoundary>
+              </View>
+            ))
+          ) : (
+            <ServerOfflinePanel connectionStatus={connection.connectionStatus} />
+          )}
         </View>
 
         {!keyboardVisible ? (

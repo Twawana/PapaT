@@ -100,7 +100,7 @@ export function AgentProviderModal({
 
   useEffect(() => {
     if (!visible || !isConnected) return;
-    void refresh(true);
+    void refresh(false);
   }, [visible, isConnected, refresh]);
 
   useEffect(() => {
@@ -321,6 +321,13 @@ export function AgentProviderModal({
         <ScrollView contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled">
           {loading && providers.length === 0 ? (
             <ActivityIndicator color={colors.accent} style={styles.loader} />
+          ) : null}
+
+          {loading && providers.length > 0 ? (
+            <View style={styles.refreshingRow}>
+              <ActivityIndicator size="small" color={colors.accent} />
+              <Text style={styles.refreshingText}>Checking agents on your PC…</Text>
+            </View>
           ) : null}
 
           {providers.map((provider) => {
@@ -561,6 +568,16 @@ function createStyles(colors: ThemeColors) {
     },
     loader: {
       marginTop: 24,
+    },
+    refreshingRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 8,
+      paddingVertical: 4,
+    },
+    refreshingText: {
+      color: colors.textMuted,
+      fontSize: 12,
     },
     card: {
       borderRadius: 12,

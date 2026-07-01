@@ -80,6 +80,7 @@ export function findAgentCommand(): string | null {
       try {
         const found = execFileSync("where.exe", [name], {
           encoding: "utf8",
+          timeout: 5_000,
           windowsHide: true,
           stdio: ["ignore", "pipe", "ignore"],
         })
@@ -350,7 +351,7 @@ export async function checkCursorAuth(
     const apiKey = getCursorApiKey();
     const { stdout, stderr, code } = await runCommand(command, ["status"], {
       signal,
-      timeoutMs: 90_000,
+      timeoutMs: 25_000,
       apiKey: apiKey || undefined,
     });
 

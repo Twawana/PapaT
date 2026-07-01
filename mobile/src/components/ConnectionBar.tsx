@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { useTheme } from "../context/ThemeContext";
+import { DEV_LOCAL_IP, HOST_SERVER_PORT } from "../config/api";
 import { useThemedStyles } from "../hooks/useThemedStyles";
 import { ConnectionStatus } from "../types/protocol";
 import { QrPairModal } from "./QrPairModal";
@@ -255,7 +256,7 @@ export function ConnectionBar({
               style={[styles.input, styles.hostInput]}
               value={host}
               onChangeText={onHostChange}
-              placeholder="PC IP address"
+              placeholder={`PC IP (e.g. ${DEV_LOCAL_IP})`}
               placeholderTextColor={colors.placeholder}
               autoCapitalize="none"
               autoCorrect={false}
@@ -266,7 +267,7 @@ export function ConnectionBar({
               style={[styles.input, styles.portInput]}
               value={port}
               onChangeText={onPortChange}
-              placeholder="Port"
+              placeholder={String(HOST_SERVER_PORT)}
               placeholderTextColor={colors.placeholder}
               keyboardType="number-pad"
               returnKeyType="done"
