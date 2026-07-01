@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: papat
+    runtime: node
+    rootDir: host-server
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PAPAT_HOST
+        value: 0.0.0.0

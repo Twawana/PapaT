@@ -7,6 +7,13 @@ function envNumber(primary: string, legacy: string, fallback: number): number {
   return raw ? Number(raw) : fallback;
 }
 
+function resolvePort(): number {
+  if (process.env.PORT) {
+    return Number(process.env.PORT);
+  }
+  return envNumber("TITUS_PORT", "PAPAT_PORT", 3847);
+}
+
 function envBool(primary: string, legacy: string, defaultEnabled: boolean): boolean {
   const raw = process.env[primary] ?? process.env[legacy];
   if (raw === undefined) return defaultEnabled;
@@ -14,7 +21,7 @@ function envBool(primary: string, legacy: string, defaultEnabled: boolean): bool
 }
 
 export const config = {
-  port: envNumber("TITUS_PORT", "PAPAT_PORT", 3847),
+  port: resolvePort(),
   host: envString("TITUS_HOST", "PAPAT_HOST", "0.0.0.0"),
   executionTimeoutMs: envNumber("TITUS_EXEC_TIMEOUT", "PAPAT_EXEC_TIMEOUT", 30_000),
   workspaceDir: envString("TITUS_WORKSPACE", "PAPAT_WORKSPACE", "./workspace"),

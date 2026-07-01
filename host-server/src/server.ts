@@ -1,5 +1,6 @@
 import * as os from "os";
 import { randomUUID } from "crypto";
+import { createServer as createHttpServer } from "http";
 import { WebSocket, WebSocketServer } from "ws";
 import { IncomingMessage } from "http";
 import { config } from "./config";
@@ -152,9 +153,29 @@ export function createServer(): WebSocketServer {
   initAuth();
   bootstrapAgentSessions();
 
-  const wss = new WebSocketServer({
-    host: config.host,
-    port: config.port,
+  const httpServer = createHttpServer((req, res) => {
+    const path = req.url?.split("?")[0] ?? "";
+    if (path === "/" || path === "/health") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          status: "ok",
+          service: "papat-host",
+          version: SERVER_VERSION,
+        })
+      );
+      return;
+    }
+    res.writeHead(404);
+    res.end();
+  });
+
+  const wss = new WebSocketServer({ server: httpServer });
+
+  httpServer.listen(config.port, config.host, () => {
+    console.log(
+      `[Titus Host] Listening on ws://${config.host}:${config.port} (workspace: ${getWorkspaceRoot()})`
+    );
   });
 
   initVscodeBridge((message, except) => {
@@ -204,10 +225,6 @@ export function createServer(): WebSocketServer {
     }
   });
 
-  console.log(
-    `[Titus Host] Listening on ws://${config.host}:${config.port} (workspace: ${getWorkspaceRoot()})`
-  );
-
   wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
     const clientId = randomUUID().slice(0, 8);
     console.log(`[Titus Host] Client connected: ${clientId}`);
@@ -253,6 +270,11 @@ export function createServer(): WebSocketServer {
   });
 
   return wss;
+}
+
+// Some deploy targets (e.g. Render) run dist/server.js — bootstrap the real entry.
+if (require.main === module) {
+  require("./index");
 }
 
 function send(ws: WebSocket, message: ServerMessage): void {

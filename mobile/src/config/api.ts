@@ -15,11 +15,12 @@ export const HOST_SERVER_PORT = Number(
 export const DEV_LOCAL_IP =
   process.env.EXPO_PUBLIC_DEV_HOST?.trim() || "192.168.178.40";
 
-const PRODUCTION_HOST =
-  process.env.EXPO_PUBLIC_PRODUCTION_HOST?.trim() || "api.papat.app";
+export const API_BASE_URL = __DEV__
+  ? `http://${DEV_LOCAL_IP}:${HOST_SERVER_PORT}`
+  : "https://papat.onrender.com";
 
-const PRODUCTION_USE_TLS =
-  process.env.EXPO_PUBLIC_PRODUCTION_USE_TLS !== "false";
+const PRODUCTION_HOST = "papat.onrender.com";
+const PRODUCTION_USE_TLS = true;
 
 /** Default host for the connection form (emulator-aware in dev). */
 export function getDefaultConnectionHost(): string {
@@ -35,13 +36,6 @@ export function getDefaultConnectionHost(): string {
 
 export const DEFAULT_HOST = getDefaultConnectionHost();
 export const DEFAULT_PORT = String(HOST_SERVER_PORT);
-
-/** HTTP base URL (for future REST endpoints; host uses WebSocket today). */
-export const API_BASE_URL = __DEV__
-  ? `http://${DEV_LOCAL_IP}:${HOST_SERVER_PORT}`
-  : `${PRODUCTION_USE_TLS ? "https" : "http"}://${PRODUCTION_HOST}${
-      PRODUCTION_USE_TLS ? "" : `:${HOST_SERVER_PORT}`
-    }`;
 
 export function buildWebSocketUrl(
   host: string,
