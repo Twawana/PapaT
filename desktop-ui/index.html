@@ -46,7 +46,7 @@
         letter-spacing: -0.02em;
       }
 
-      p {
+      .subtitle {
         margin: 0;
         color: var(--muted);
         line-height: 1.55;
@@ -72,6 +72,12 @@
         font-weight: 600;
       }
 
+      .value {
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 0.9rem;
+        color: var(--accent);
+      }
+
       .pill {
         font-size: 0.85rem;
         padding: 4px 10px;
@@ -89,62 +95,129 @@
         background: rgba(255, 176, 32, 0.12);
       }
 
+      .pair-box {
+        margin-top: 20px;
+        padding: 18px;
+        border-radius: 14px;
+        border: 1px dashed rgba(110, 168, 254, 0.35);
+        background: rgba(110, 168, 254, 0.06);
+      }
+
+      .pair-title {
+        margin: 0 0 8px;
+        font-weight: 700;
+      }
+
+      .pair-code {
+        font-size: 2rem;
+        font-weight: 800;
+        letter-spacing: 0.2em;
+        color: var(--accent);
+        margin: 8px 0 12px;
+      }
+
       .steps {
         margin-top: 24px;
         padding-left: 20px;
         color: var(--muted);
+        line-height: 1.6;
       }
 
       .steps li + li {
         margin-top: 8px;
       }
 
-      code {
-        color: var(--accent);
+      button.copy {
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text);
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      button.copy:hover {
+        background: rgba(255, 255, 255, 0.1);
       }
     </style>
   </head>
   <body>
     <main class="card">
       <h1>PapaT</h1>
-      <p>Your PC host is running. Connect the PapaT mobile app to control this machine.</p>
+      <p class="subtitle">
+        Your PC host is running. Keep this window open and connect from the Titus
+        app on your phone (same Wi-Fi).
+      </p>
 
       <section class="status" aria-live="polite">
         <div class="row">
-          <span class="label">Desktop UI</span>
-          <span class="pill ok" id="ui-status">Running</span>
+          <span class="label">Host status</span>
+          <span class="pill warn" id="backend-status">Starting…</span>
         </div>
         <div class="row">
-          <span class="label">Backend host</span>
-          <span class="pill warn" id="backend-status">Checking…</span>
+          <span class="label">PC address (for phone)</span>
+          <span class="value" id="lan-ip">—</span>
+        </div>
+        <div class="row">
+          <span class="label">Port</span>
+          <span class="value" id="port">3847</span>
         </div>
         <div class="row">
           <span class="label">WebSocket</span>
-          <span class="pill" id="ws-endpoint">ws://127.0.0.1:3847</span>
+          <span class="value" id="ws-endpoint">—</span>
         </div>
       </section>
 
+      <section class="pair-box">
+        <p class="pair-title">Pairing code</p>
+        <p class="subtitle">Enter this in the app, or scan the QR in the terminal log.</p>
+        <div class="pair-code" id="pair-code">······</div>
+        <button class="copy" type="button" id="copy-ip">Copy IP</button>
+      </section>
+
       <ol class="steps">
-        <li>Open the PapaT app on your phone.</li>
-        <li>Scan the pairing QR code shown in the backend terminal, or enter your PC IP and port <code>3847</code>.</li>
-        <li>Keep this window open while you work — closing it stops the host server.</li>
+        <li>Install / open the Titus mobile app on your phone.</li>
+        <li>Make sure phone and PC are on the <strong>same Wi-Fi</strong>.</li>
+        <li>Enter the PC address and port above, then pair with the code.</li>
+        <li>Closing this window stops the host — your phone will disconnect.</li>
       </ol>
     </main>
 
     <script>
-      const BACKEND_PORT = 3847;
-      const wsEndpoint = document.getElementById("ws-endpoint");
       const backendStatus = document.getElementById("backend-status");
+      const lanIpEl = document.getElementById("lan-ip");
+      const portEl = document.getElementById("port");
+      const wsEndpoint = document.getElementById("ws-endpoint");
+      const pairCodeEl = document.getElementById("pair-code");
+      const copyIpBtn = document.getElementById("copy-ip");
 
-      wsEndpoint.textContent = `ws://127.0.0.1:${BACKEND_PORT}`;
+      let latestIp = "";
 
       function setBackendStatus(ok, text) {
         backendStatus.textContent = text;
         backendStatus.className = "pill " + (ok ? "ok" : "warn");
       }
 
-      function checkBackend() {
-        const ws = new WebSocket(`ws://127.0.0.1:${BACKEND_PORT}`);
+      async function refreshStatus() {
+        try {
+          const res = await fetch("/api/status");
+          const data = await res.json();
+          latestIp = data.lanIp || "—";
+          lanIpEl.textContent = latestIp;
+          portEl.textContent = String(data.port);
+          wsEndpoint.textContent = data.wsUrl || `ws://${latestIp}:${data.port}`;
+          if (data.pairingCode) {
+            pairCodeEl.textContent = data.pairingCode;
+          }
+        } catch {
+          // UI server only — ignore
+        }
+      }
+
+      function checkBackend(port) {
+        const ws = new WebSocket(`ws://127.0.0.1:${port}`);
 
         const timeout = setTimeout(() => {
           ws.close();
@@ -163,8 +236,27 @@
         };
       }
 
-      checkBackend();
-      setInterval(checkBackend, 5000);
+      copyIpBtn.addEventListener("click", async () => {
+        if (!latestIp || latestIp === "—") return;
+        try {
+          await navigator.clipboard.writeText(latestIp);
+          copyIpBtn.textContent = "Copied!";
+          setTimeout(() => {
+            copyIpBtn.textContent = "Copy IP";
+          }, 1500);
+        } catch {
+          copyIpBtn.textContent = "Copy failed";
+        }
+      });
+
+      async function tick() {
+        await refreshStatus();
+        const port = Number(portEl.textContent) || 3847;
+        checkBackend(port);
+      }
+
+      tick();
+      setInterval(tick, 5000);
     </script>
   </body>
 </html>

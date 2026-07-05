@@ -2,6 +2,7 @@ const { app, BrowserWindow } = require("electron");
 const { spawn } = require("child_process");
 const http = require("http");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const net = require("net");
 
@@ -14,6 +15,27 @@ let serverProcess = null;
 let uiServer = null;
 let mainWindow = null;
 let isQuitting = false;
+let pairingCode = null;
+
+function getLanIp() {
+  const nets = os.networkInterfaces();
+  for (const iface of Object.values(nets)) {
+    if (!iface) continue;
+    for (const entry of iface) {
+      if (entry.family === "IPv4" && !entry.internal) {
+        return entry.address;
+      }
+    }
+  }
+  return "127.0.0.1";
+}
+
+function parseBackendOutput(text) {
+  const codeMatch = text.match(/Code:\s*([A-Z0-9]{6})/i);
+  if (codeMatch) {
+    pairingCode = codeMatch[1].toUpperCase();
+  }
+}
 
 function logBackend(message) {
   process.stdout.write(`[PapaT Backend] ${message}`);
@@ -43,7 +65,9 @@ function resolveBackendEntry(hostServerRoot) {
   }
 
   throw new Error(
-    `Backend not built. Run "npm run build:host" first.\nExpected: ${indexEntry}`
+    app.isPackaged
+      ? "PapaT host files are missing. Please reinstall the application."
+      : `Backend not built. Run "npm run build:host" first.\nExpected: ${indexEntry}`
   );
 }
 
@@ -61,10 +85,17 @@ function resolveNodeRunner() {
   };
 }
 
+function getWorkspaceDir(hostServerRoot) {
+  if (app.isPackaged) {
+    return path.join(app.getPath("userData"), "workspace");
+  }
+  return path.join(hostServerRoot, "workspace");
+}
+
 function startBackendServer() {
   const hostServerRoot = getHostServerRoot();
   const backendEntry = resolveBackendEntry(hostServerRoot);
-  const workspaceDir = path.join(hostServerRoot, "workspace");
+  const workspaceDir = getWorkspaceDir(hostServerRoot);
   const { command, extraEnv } = resolveNodeRunner();
 
   fs.mkdirSync(workspaceDir, { recursive: true });
@@ -78,19 +109,23 @@ function startBackendServer() {
       TITUS_PORT: String(BACKEND_PORT),
       PAPAT_WORKSPACE: workspaceDir,
       TITUS_WORKSPACE: workspaceDir,
-      PAPAT_HOST: "127.0.0.1",
-      TITUS_HOST: "127.0.0.1",
+      PAPAT_HOST: "0.0.0.0",
+      TITUS_HOST: "0.0.0.0",
     },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
   });
 
   serverProcess.stdout?.on("data", (chunk) => {
-    logBackend(chunk.toString());
+    const text = chunk.toString();
+    parseBackendOutput(text);
+    logBackend(text);
   });
 
   serverProcess.stderr?.on("data", (chunk) => {
-    logBackendError(chunk.toString());
+    const text = chunk.toString();
+    parseBackendOutput(text);
+    logBackendError(text);
   });
 
   serverProcess.on("error", (err) => {
@@ -152,8 +187,25 @@ function startUiServer() {
   const uiRoot = path.join(__dirname, "desktop-ui");
 
   uiServer = http.createServer((req, res) => {
-    const requestPath = req.url === "/" ? "/index.html" : req.url.split("?")[0];
-    const filePath = path.normalize(path.join(uiRoot, requestPath));
+    const requestPath = req.url?.split("?")[0] ?? "/";
+
+    if (requestPath === "/api/status") {
+      const lanIp = getLanIp();
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          lanIp,
+          port: BACKEND_PORT,
+          pairingCode,
+          wsUrl: `ws://${lanIp}:${BACKEND_PORT}`,
+        })
+      );
+      return;
+    }
+
+    const filePath = path.normalize(
+      path.join(uiRoot, requestPath === "/" ? "/index.html" : requestPath)
+    );
 
     if (!filePath.startsWith(uiRoot)) {
       res.writeHead(403);
@@ -252,6 +304,10 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
+  if (process.platform === "win32") {
+    app.setAppUserModelId("com.papat.app");
+  }
+
   app.on("second-instance", () => {
     if (mainWindow) {
       if (mainWindow.isMinimized()) {

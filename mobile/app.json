@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Titus",
-    "slug": "titus",
-    "version": "0.1.0",
+    "name": "PapaT",
+    "slug": "papat",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -14,14 +14,21 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.titus.mobile"
+      "bundleIdentifier": "com.papat.mobile"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0d1117"
       },
-      "package": "com.titus.mobile"
+      "package": "com.papat.mobile",
+      "versionCode": 1,
+      "usesCleartextTraffic": true,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -31,17 +38,22 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Titus to scan the pairing QR code on your PC."
+          "cameraPermission": "Allow PapaT to scan the pairing QR code on your PC."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Titus to attach photos to agent prompts.",
-          "cameraPermission": "Allow Titus to take photos for agent prompts."
+          "photosPermission": "Allow PapaT to attach photos to agent prompts.",
+          "cameraPermission": "Allow PapaT to take photos for agent prompts."
         }
       ],
       "expo-secure-store"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "721e533d-24fd-4971-86ab-5db4de102f22"
+      }
+    }
   }
 }

@@ -1,13 +1,18 @@
 {
-  "name": "titus-mobile",
-  "version": "0.1.0",
+  "name": "papat-mobile",
+  "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
     "start": "expo start --lan",
     "start:tunnel": "expo start --tunnel",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "eas:init": "eas init",
+    "eas:login": "powershell -ExecutionPolicy Bypass -File scripts/eas-login.ps1",
+    "build:android:apk": "powershell -ExecutionPolicy Bypass -File scripts/build-android-apk.ps1",
+    "build:android:store": "eas build --platform android --profile production",
+    "submit:android": "eas submit --platform android --profile production"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
@@ -33,6 +38,7 @@
   "devDependencies": {
     "@babel/core": "^7.26.10",
     "@types/react": "~19.1.0",
+    "eas-cli": "^16.28.0",
     "typescript": "^5.8.2"
   },
   "private": true

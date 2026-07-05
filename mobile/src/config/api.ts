@@ -9,18 +9,11 @@ export const HOST_SERVER_PORT = Number(
 );
 
 /**
- * Your PC's LAN IP on Wi-Fi — never use localhost or 127.0.0.1 on a real device.
- * Set EXPO_PUBLIC_DEV_HOST in mobile/.env (see .env.example).
+ * Example LAN IP shown in UI placeholders (dev only).
+ * Users always enter their own PC address after installing PapaT on desktop.
  */
 export const DEV_LOCAL_IP =
-  process.env.EXPO_PUBLIC_DEV_HOST?.trim() || "192.168.178.40";
-
-export const API_BASE_URL = __DEV__
-  ? `http://${DEV_LOCAL_IP}:${HOST_SERVER_PORT}`
-  : "https://papat.onrender.com";
-
-const PRODUCTION_HOST = "papat.onrender.com";
-const PRODUCTION_USE_TLS = true;
+  process.env.EXPO_PUBLIC_DEV_HOST?.trim() || "192.168.1.100";
 
 /** Default host for the connection form (emulator-aware in dev). */
 export function getDefaultConnectionHost(): string {
@@ -31,11 +24,16 @@ export function getDefaultConnectionHost(): string {
   if (__DEV__ && Platform.OS === "android") {
     return "10.0.2.2";
   }
-  return DEV_LOCAL_IP;
+  return "";
 }
 
 export const DEFAULT_HOST = getDefaultConnectionHost();
 export const DEFAULT_PORT = String(HOST_SERVER_PORT);
+
+/** Reserved for future cloud features; phone connects to the user's PC over LAN. */
+export const API_BASE_URL = __DEV__
+  ? `http://${DEV_LOCAL_IP}:${HOST_SERVER_PORT}`
+  : "https://papat.onrender.com";
 
 export function buildWebSocketUrl(
   host: string,
@@ -46,14 +44,6 @@ export function buildWebSocketUrl(
     .replace(/^wss?:\/\//, "")
     .replace(/^https?:\/\//, "")
     .split("/")[0];
-  if (!__DEV__) {
-    const scheme = PRODUCTION_USE_TLS ? "wss" : "ws";
-    const portSuffix =
-      PRODUCTION_USE_TLS && (port === 443 || port === 80) ? "" : `:${port}`;
-    if (!trimmed || trimmed === PRODUCTION_HOST) {
-      return `${scheme}://${PRODUCTION_HOST}${portSuffix}`;
-    }
-  }
   return `ws://${trimmed}:${port}`;
 }
 
@@ -72,12 +62,12 @@ export function formatConnectionError(
   }
 
   const hint = isLocalhostHost(host)
-    ? " Replace localhost with your PC's Wi-Fi IP (e.g. " + DEV_LOCAL_IP + ")."
+    ? " Replace localhost with your PC's Wi-Fi IP from the PapaT desktop app."
     : "";
 
   const base =
     `Cannot reach PapaT host at ${buildWebSocketUrl(host, port)}.` +
-    ` Ensure the PC server is running, you're on the same Wi-Fi, and the IP is correct.${hint}`;
+    ` Install and open PapaT on your PC, use the same Wi-Fi, and enter the IP shown in the desktop app.${hint}`;
 
   return detail && !detail.startsWith("Cannot reach") ? `${base} (${detail})` : base;
 }
@@ -86,10 +76,10 @@ export const CONNECTION_HELP = {
   port: HOST_SERVER_PORT,
   suggestedHost: DEV_LOCAL_IP,
   steps: [
-    "Start the host server on your PC (npm start in host-server)",
-    `Enter your PC's Wi-Fi IP — e.g. ${DEV_LOCAL_IP} (not localhost)`,
+    "Install PapaT on your PC and open it (Start Menu > PapaT)",
+    "Enter the PC address shown in the PapaT desktop window",
     `Use port ${HOST_SERVER_PORT}`,
     "Connect phone and PC to the same Wi-Fi network",
-    "Scan the pairing QR code shown in the PC terminal",
+    "Scan the QR code or enter the pairing code from the desktop app",
   ],
 } as const;

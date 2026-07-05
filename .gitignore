@@ -1,0 +1,8 @@
+node_modules/
+dist/
+host-server/node_modules/
+host-server/dist/
+mobile/node_modules/
+*.log
+.env
+.DS_Store
