@@ -3,8 +3,11 @@
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
-    "start": "expo start --lan",
+    "start": "expo start --offline",
+    "start:online": "expo start --lan",
     "start:tunnel": "expo start --tunnel",
+    "start:offline": "expo start --offline",
+    "start:localhost": "expo start --localhost",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",

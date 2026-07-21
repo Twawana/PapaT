@@ -32,7 +32,7 @@
       }
 
       .card {
-        width: min(720px, 100%);
+        width: min(760px, 100%);
         background: color-mix(in srgb, var(--panel) 92%, white 8%);
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 18px;
@@ -53,9 +53,9 @@
       }
 
       .status {
-        margin-top: 24px;
+        margin-top: 20px;
         display: grid;
-        gap: 12px;
+        gap: 10px;
       }
 
       .row {
@@ -63,7 +63,7 @@
         align-items: center;
         justify-content: space-between;
         gap: 16px;
-        padding: 14px 16px;
+        padding: 12px 16px;
         border-radius: 12px;
         background: rgba(255, 255, 255, 0.04);
       }
@@ -97,15 +97,44 @@
 
       .pair-box {
         margin-top: 20px;
-        padding: 18px;
+        padding: 20px;
         border-radius: 14px;
         border: 1px dashed rgba(110, 168, 254, 0.35);
         background: rgba(110, 168, 254, 0.06);
+        display: grid;
+        grid-template-columns: 200px 1fr;
+        gap: 20px;
+        align-items: center;
+      }
+
+      .qr-wrap {
+        width: 200px;
+        height: 200px;
+        border-radius: 12px;
+        background: #fff;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+      }
+
+      .qr-wrap img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+      }
+
+      .qr-placeholder {
+        color: #666;
+        font-size: 13px;
+        text-align: center;
+        padding: 12px;
       }
 
       .pair-title {
         margin: 0 0 8px;
         font-weight: 700;
+        font-size: 1.05rem;
       }
 
       .pair-code {
@@ -113,11 +142,53 @@
         font-weight: 800;
         letter-spacing: 0.2em;
         color: var(--accent);
-        margin: 8px 0 12px;
+        margin: 8px 0 6px;
+      }
+
+      .expires {
+        color: var(--muted);
+        font-size: 13px;
+        margin-bottom: 14px;
+      }
+
+      .expires.expired {
+        color: var(--warn);
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      button.action {
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text);
+        border-radius: 8px;
+        padding: 8px 14px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      button.action.primary {
+        background: var(--accent);
+        border-color: transparent;
+        color: #0f1117;
+      }
+
+      button.action:hover {
+        filter: brightness(1.08);
+      }
+
+      button.action:disabled {
+        opacity: 0.55;
+        cursor: default;
       }
 
       .steps {
-        margin-top: 24px;
+        margin-top: 22px;
         padding-left: 20px;
         color: var(--muted);
         line-height: 1.6;
@@ -127,19 +198,16 @@
         margin-top: 8px;
       }
 
-      button.copy {
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        background: rgba(255, 255, 255, 0.06);
-        color: var(--text);
-        border-radius: 8px;
-        padding: 6px 12px;
-        font-size: 12px;
-        font-weight: 600;
-        cursor: pointer;
-      }
+      @media (max-width: 640px) {
+        .pair-box {
+          grid-template-columns: 1fr;
+          justify-items: center;
+          text-align: center;
+        }
 
-      button.copy:hover {
-        background: rgba(255, 255, 255, 0.1);
+        .actions {
+          justify-content: center;
+        }
       }
     </style>
   </head>
@@ -147,7 +215,7 @@
     <main class="card">
       <h1>PapaT</h1>
       <p class="subtitle">
-        Your PC host is running. Keep this window open and connect from the Titus
+        Your PC host is running. Keep this window open and connect from the PapaT
         app on your phone (same Wi-Fi).
       </p>
 
@@ -164,99 +232,192 @@
           <span class="label">Port</span>
           <span class="value" id="port">3847</span>
         </div>
-        <div class="row">
-          <span class="label">WebSocket</span>
-          <span class="value" id="ws-endpoint">—</span>
-        </div>
       </section>
 
       <section class="pair-box">
-        <p class="pair-title">Pairing code</p>
-        <p class="subtitle">Enter this in the app, or scan the QR in the terminal log.</p>
-        <div class="pair-code" id="pair-code">······</div>
-        <button class="copy" type="button" id="copy-ip">Copy IP</button>
+        <div class="qr-wrap" id="qr-wrap">
+          <div class="qr-placeholder" id="qr-placeholder">Waiting for host…</div>
+          <img id="qr-image" alt="Pairing QR code" hidden />
+        </div>
+        <div>
+          <p class="pair-title">Scan to pair your phone</p>
+          <p class="subtitle">Or enter the code manually in the PapaT mobile app.</p>
+          <div class="pair-code" id="pair-code">······</div>
+          <div class="expires" id="expires">Expires in —</div>
+          <div class="actions">
+            <button class="action primary" type="button" id="refresh-btn">
+              Refresh code
+            </button>
+            <button class="action" type="button" id="copy-ip">Copy IP</button>
+            <button class="action" type="button" id="copy-code">Copy code</button>
+          </div>
+        </div>
       </section>
 
       <ol class="steps">
-        <li>Install / open the Titus mobile app on your phone.</li>
+        <li>Open the PapaT app on your phone.</li>
         <li>Make sure phone and PC are on the <strong>same Wi-Fi</strong>.</li>
-        <li>Enter the PC address and port above, then pair with the code.</li>
-        <li>Closing this window stops the host — your phone will disconnect.</li>
+        <li>Scan this QR code, or enter the IP, port, and pairing code.</li>
+        <li>If the code expires, click <strong>Refresh code</strong>.</li>
       </ol>
     </main>
 
     <script>
+      const BACKEND_PORT = 3847;
+      const PAIRING_URL = `http://127.0.0.1:${BACKEND_PORT}/api/pairing`;
+      const REFRESH_URL = `http://127.0.0.1:${BACKEND_PORT}/api/pairing/refresh`;
+
       const backendStatus = document.getElementById("backend-status");
       const lanIpEl = document.getElementById("lan-ip");
       const portEl = document.getElementById("port");
-      const wsEndpoint = document.getElementById("ws-endpoint");
       const pairCodeEl = document.getElementById("pair-code");
+      const expiresEl = document.getElementById("expires");
+      const qrImage = document.getElementById("qr-image");
+      const qrPlaceholder = document.getElementById("qr-placeholder");
+      const refreshBtn = document.getElementById("refresh-btn");
       const copyIpBtn = document.getElementById("copy-ip");
+      const copyCodeBtn = document.getElementById("copy-code");
 
       let latestIp = "";
+      let latestCode = "";
+      let expiresAt = null;
+      let countdownTimer = null;
 
       function setBackendStatus(ok, text) {
         backendStatus.textContent = text;
         backendStatus.className = "pill " + (ok ? "ok" : "warn");
       }
 
+      function formatCountdown(ms) {
+        const total = Math.max(0, Math.ceil(ms / 1000));
+        const minutes = Math.floor(total / 60);
+        const seconds = String(total % 60).padStart(2, "0");
+        return `${minutes}:${seconds}`;
+      }
+
+      function updateCountdown() {
+        if (!expiresAt) {
+          expiresEl.textContent = "Expires in —";
+          expiresEl.classList.remove("expired");
+          return;
+        }
+
+        const remaining = expiresAt - Date.now();
+        if (remaining <= 0) {
+          expiresEl.textContent = "Expired — click Refresh code";
+          expiresEl.classList.add("expired");
+          return;
+        }
+
+        expiresEl.textContent = `Expires in ${formatCountdown(remaining)}`;
+        expiresEl.classList.toggle("expired", remaining < 30_000);
+      }
+
+      function applyPairing(data) {
+        if (!data) return;
+
+        latestIp = data.lanIp || "—";
+        lanIpEl.textContent = latestIp;
+        portEl.textContent = String(data.port || BACKEND_PORT);
+
+        if (data.code) {
+          latestCode = data.code;
+          pairCodeEl.textContent = data.code;
+        }
+
+        expiresAt = data.expiresAt || null;
+        updateCountdown();
+
+        if (data.qrDataUrl) {
+          qrImage.src = data.qrDataUrl;
+          qrImage.hidden = false;
+          qrPlaceholder.hidden = true;
+        } else if (!data.enabled) {
+          qrImage.hidden = true;
+          qrPlaceholder.hidden = false;
+          qrPlaceholder.textContent = "Pairing disabled on this host";
+        } else {
+          qrImage.hidden = true;
+          qrPlaceholder.hidden = false;
+          qrPlaceholder.textContent = "QR unavailable";
+        }
+      }
+
+      async function fetchPairing() {
+        const res = await fetch(PAIRING_URL, { cache: "no-store" });
+        if (!res.ok) {
+          throw new Error("Pairing API unavailable");
+        }
+        return res.json();
+      }
+
+      async function refreshPairing() {
+        refreshBtn.disabled = true;
+        refreshBtn.textContent = "Refreshing…";
+        try {
+          const res = await fetch(REFRESH_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+          });
+          if (!res.ok) {
+            throw new Error("Refresh failed");
+          }
+          const data = await res.json();
+          applyPairing(data);
+          setBackendStatus(true, "Online");
+        } catch {
+          expiresEl.textContent = "Could not refresh — is the host running?";
+          expiresEl.classList.add("expired");
+        } finally {
+          refreshBtn.disabled = false;
+          refreshBtn.textContent = "Refresh code";
+        }
+      }
+
       async function refreshStatus() {
         try {
-          const res = await fetch("/api/status");
-          const data = await res.json();
-          latestIp = data.lanIp || "—";
-          lanIpEl.textContent = latestIp;
-          portEl.textContent = String(data.port);
-          wsEndpoint.textContent = data.wsUrl || `ws://${latestIp}:${data.port}`;
-          if (data.pairingCode) {
-            pairCodeEl.textContent = data.pairingCode;
-          }
+          const data = await fetchPairing();
+          applyPairing(data);
+          setBackendStatus(true, "Online");
         } catch {
-          // UI server only — ignore
+          setBackendStatus(false, "Offline");
+          qrImage.hidden = true;
+          qrPlaceholder.hidden = false;
+          qrPlaceholder.textContent = "Waiting for host…";
         }
       }
 
-      function checkBackend(port) {
-        const ws = new WebSocket(`ws://127.0.0.1:${port}`);
-
-        const timeout = setTimeout(() => {
-          ws.close();
-          setBackendStatus(false, "Starting…");
-        }, 4000);
-
-        ws.onopen = () => {
-          clearTimeout(timeout);
-          setBackendStatus(true, "Online");
-          ws.close();
-        };
-
-        ws.onerror = () => {
-          clearTimeout(timeout);
-          setBackendStatus(false, "Offline");
-        };
-      }
-
-      copyIpBtn.addEventListener("click", async () => {
-        if (!latestIp || latestIp === "—") return;
+      async function copyText(button, value, label) {
+        if (!value || value === "—") return;
         try {
-          await navigator.clipboard.writeText(latestIp);
-          copyIpBtn.textContent = "Copied!";
+          await navigator.clipboard.writeText(value);
+          const original = button.textContent;
+          button.textContent = "Copied!";
           setTimeout(() => {
-            copyIpBtn.textContent = "Copy IP";
+            button.textContent = original || label;
           }, 1500);
         } catch {
-          copyIpBtn.textContent = "Copy failed";
+          button.textContent = "Copy failed";
         }
-      });
-
-      async function tick() {
-        await refreshStatus();
-        const port = Number(portEl.textContent) || 3847;
-        checkBackend(port);
       }
 
-      tick();
-      setInterval(tick, 5000);
+      refreshBtn.addEventListener("click", () => {
+        void refreshPairing();
+      });
+
+      copyIpBtn.addEventListener("click", () => {
+        void copyText(copyIpBtn, latestIp, "Copy IP");
+      });
+
+      copyCodeBtn.addEventListener("click", () => {
+        void copyText(copyCodeBtn, latestCode, "Copy code");
+      });
+
+      void refreshStatus();
+      setInterval(() => {
+        void refreshStatus();
+      }, 5000);
+      countdownTimer = setInterval(updateCountdown, 1000);
     </script>
   </body>
 </html>

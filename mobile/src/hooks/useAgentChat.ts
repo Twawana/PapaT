@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AppState, AppStateStatus } from "react-native";
 import * as Haptics from "expo-haptics";
 import { titusClient } from "../services/websocket";
 import {
@@ -229,10 +230,15 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
   }, [loadHistory]);
 
   useEffect(() => {
-    if (!isConnected || !sessionsLoadedRef.current) {
-      if (!isConnected && (isRunning || runningOnPc)) {
+    if (!isConnected) {
+      if (isRunning) {
         wasRunningOnDisconnectRef.current = true;
+        setRunningOnPc(true);
       }
+      return;
+    }
+
+    if (!sessionsLoadedRef.current) {
       return;
     }
 
@@ -240,7 +246,31 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
       await refreshSessions();
       await syncAfterReconnect();
     })();
-  }, [isConnected, refreshSessions, syncAfterReconnect]);
+  }, [isConnected, isRunning, refreshSessions, syncAfterReconnect]);
+
+  useEffect(() => {
+    const onAppStateChange = (nextState: AppStateStatus) => {
+      if (nextState !== "active") {
+        if (isRunning) {
+          setRunningOnPc(true);
+          wasRunningOnDisconnectRef.current = true;
+        }
+        return;
+      }
+
+      if (!titusClient.isConnected()) {
+        return;
+      }
+
+      void (async () => {
+        await refreshSessions();
+        await syncAfterReconnect();
+      })();
+    };
+
+    const subscription = AppState.addEventListener("change", onAppStateChange);
+    return () => subscription.remove();
+  }, [isRunning, refreshSessions, syncAfterReconnect]);
 
   useEffect(() => {
     if (!isConnected || !runningOnPc || !isRunning) {

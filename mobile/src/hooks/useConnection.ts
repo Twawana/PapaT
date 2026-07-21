@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { Platform } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AppState, AppStateStatus, Platform } from "react-native";
 import {
   DEFAULT_HOST,
   DEFAULT_PORT,
@@ -27,6 +27,22 @@ export function useConnection() {
   const [isPaired, setIsPaired] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedToken, setSavedToken] = useState<string | null>(null);
+  const [backgroundContinued, setBackgroundContinued] = useState(false);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const userDisconnectedRef = useRef(false);
+  const savedTokenRef = useRef<string | null>(null);
+  const hostRef = useRef(host);
+  const portRef = useRef(port);
+
+  useEffect(() => {
+    savedTokenRef.current = savedToken;
+  }, [savedToken]);
+
+  useEffect(() => {
+    hostRef.current = host;
+    portRef.current = port;
+  }, [host, port]);
 
   useEffect(() => {
     void loadCredentials()
@@ -37,6 +53,7 @@ export function useConnection() {
         setSavedToken(creds.token);
         setDeviceName(creds.deviceName ?? null);
         setIsPaired(true);
+        titusClient.updateReconnectToken(creds.token, creds.deviceName);
       })
       .catch((err) => {
         console.error("[Titus] Failed to load saved credentials", err);
@@ -50,9 +67,40 @@ export function useConnection() {
       setDeviceName(name ?? null);
       setConnectionStatus("connected");
       setError(null);
+      setBackgroundContinued(false);
+      userDisconnectedRef.current = false;
     },
     []
   );
+
+  const tryAutoReconnect = useCallback(() => {
+    if (userDisconnectedRef.current) {
+      return;
+    }
+    if (titusClient.isConnected()) {
+      return;
+    }
+
+    const token = savedTokenRef.current;
+    const reconnectHost = hostRef.current;
+    const reconnectPort = parseInt(portRef.current, 10);
+
+    if (token && reconnectHost && !isNaN(reconnectPort)) {
+      setError(null);
+      setConnectionStatus("connecting");
+      titusClient.connect(reconnectHost, reconnectPort, {
+        token,
+        deviceName: Platform.OS === "ios" ? "iPhone" : "Android",
+      });
+      return;
+    }
+
+    if (titusClient.canReconnect()) {
+      setError(null);
+      setConnectionStatus("connecting");
+      titusClient.reconnect();
+    }
+  }, []);
 
   useEffect(() => {
     const removeStatus = titusClient.addStatusListener((status, detail) => {
@@ -65,6 +113,9 @@ export function useConnection() {
         setConnectionStatus("disconnected");
         setServerInfo(null);
         setVscodeConnected(false);
+        if (!userDisconnectedRef.current && appStateRef.current !== "active") {
+          setBackgroundContinued(true);
+        }
       } else if (status === "error") {
         setConnectionStatus("error");
         const target = titusClient.getConnectTarget();
@@ -89,6 +140,7 @@ export function useConnection() {
         if (message.token) {
           setSavedToken(message.token);
           setIsPaired(true);
+          titusClient.updateReconnectToken(message.token, message.deviceName);
           void saveCredentials({
             token: message.token,
             host: connectHost,
@@ -97,6 +149,11 @@ export function useConnection() {
           }).catch((err) => {
             console.error("[Titus] Failed to save credentials", err);
           });
+        } else if (savedTokenRef.current) {
+          titusClient.updateReconnectToken(
+            savedTokenRef.current,
+            message.deviceName
+          );
         }
       }
 
@@ -104,7 +161,7 @@ export function useConnection() {
         setConnectionStatus("error");
         setError(message.message);
         if (
-          savedToken &&
+          savedTokenRef.current &&
           (message.message.includes("Invalid") ||
             message.message.includes("revoked") ||
             message.message.includes("expired"))
@@ -129,10 +186,70 @@ export function useConnection() {
       removeStatus();
       removeMessage();
     };
-  }, [applySession, savedToken]);
+  }, [applySession]);
+
+  useEffect(() => {
+    const onAppStateChange = (nextState: AppStateStatus) => {
+      const previous = appStateRef.current;
+      appStateRef.current = nextState;
+
+      if (nextState === "background" || nextState === "inactive") {
+        if (
+          connectionStatus === "connected" ||
+          connectionStatus === "connecting" ||
+          connectionStatus === "authenticating"
+        ) {
+          setBackgroundContinued(true);
+        }
+        return;
+      }
+
+      if (nextState === "active" && previous !== "active") {
+        if (reconnectTimerRef.current) {
+          clearTimeout(reconnectTimerRef.current);
+        }
+        reconnectTimerRef.current = setTimeout(() => {
+          if (!titusClient.isConnected() && !userDisconnectedRef.current) {
+            tryAutoReconnect();
+          }
+        }, 400);
+      }
+    };
+
+    const subscription = AppState.addEventListener("change", onAppStateChange);
+    return () => {
+      subscription.remove();
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+      }
+    };
+  }, [connectionStatus, tryAutoReconnect]);
+
+  // Soft auto-reconnect after unexpected disconnect while app is active.
+  useEffect(() => {
+    if (connectionStatus !== "disconnected" && connectionStatus !== "error") {
+      return;
+    }
+    if (userDisconnectedRef.current) {
+      return;
+    }
+    if (appStateRef.current !== "active") {
+      return;
+    }
+    if (!savedToken && !titusClient.canReconnect()) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      tryAutoReconnect();
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [connectionStatus, savedToken, tryAutoReconnect]);
 
   const connectWithOptions = useCallback(
     (options: { token?: string; pairingCode?: string }) => {
+      userDisconnectedRef.current = false;
       setError(null);
       setConnectionStatus("connecting");
       const portNum = parseInt(port, 10);
@@ -169,6 +286,7 @@ export function useConnection() {
 
   const handlePairFromQr = useCallback(
     (qrHost: string, qrPort: number, code: string) => {
+      userDisconnectedRef.current = false;
       setHost(qrHost);
       setPort(String(qrPort));
       setError(null);
@@ -190,6 +308,7 @@ export function useConnection() {
         setConnectionStatus("error");
         return;
       }
+      userDisconnectedRef.current = false;
       setError(null);
       setConnectionStatus("connecting");
       setSavedToken(null);
@@ -215,12 +334,16 @@ export function useConnection() {
   );
 
   const handleDisconnect = useCallback(() => {
+    userDisconnectedRef.current = true;
+    setBackgroundContinued(false);
     titusClient.disconnect();
     setConnectionStatus("disconnected");
     setServerInfo(null);
   }, []);
 
   const handleForgetDevice = useCallback(async () => {
+    userDisconnectedRef.current = true;
+    setBackgroundContinued(false);
     titusClient.disconnect();
     try {
       await clearCredentials();
@@ -257,5 +380,6 @@ export function useConnection() {
     vscodeConnected,
     deviceName,
     isPaired,
+    backgroundContinued,
   };
 }

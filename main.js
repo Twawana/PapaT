@@ -198,6 +198,7 @@ function startUiServer() {
           port: BACKEND_PORT,
           pairingCode,
           wsUrl: `ws://${lanIp}:${BACKEND_PORT}`,
+          pairingApi: `http://127.0.0.1:${BACKEND_PORT}/api/pairing`,
         })
       );
       return;
@@ -233,10 +234,10 @@ function startUiServer() {
 
 function createMainWindow() {
   mainWindow = new BrowserWindow({
-    width: 960,
-    height: 640,
+    width: 860,
+    height: 780,
     minWidth: 720,
-    minHeight: 480,
+    minHeight: 640,
     show: false,
     autoHideMenuBar: true,
     title: "PapaT",

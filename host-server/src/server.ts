@@ -10,6 +10,7 @@ import {
   isAuthRequired,
   pairWithCode,
 } from "./auth";
+import { getPairingUiInfo, printPairingQr } from "./pairing-display";
 import {
   clearClientAuth,
   isClientAuthenticated,
@@ -154,8 +155,20 @@ export function createServer(): WebSocketServer {
   bootstrapAgentSessions();
 
   const httpServer = createHttpServer((req, res) => {
-    const path = req.url?.split("?")[0] ?? "";
-    if (path === "/" || path === "/health") {
+    const requestPath = req.url?.split("?")[0] ?? "";
+    const method = (req.method ?? "GET").toUpperCase();
+
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+    if (method === "OPTIONS") {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+
+    if (requestPath === "/" || requestPath === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
@@ -166,6 +179,42 @@ export function createServer(): WebSocketServer {
       );
       return;
     }
+
+    if (requestPath === "/api/pairing" && method === "GET") {
+      void getPairingUiInfo()
+        .then((info) => {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(info));
+        })
+        .catch((err) => {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(
+            JSON.stringify({
+              error: err instanceof Error ? err.message : "Failed to load pairing info",
+            })
+          );
+        });
+      return;
+    }
+
+    if (requestPath === "/api/pairing/refresh" && method === "POST") {
+      void getPairingUiInfo({ rotate: true })
+        .then(async (info) => {
+          void printPairingQr();
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(info));
+        })
+        .catch((err) => {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(
+            JSON.stringify({
+              error: err instanceof Error ? err.message : "Failed to refresh pairing",
+            })
+          );
+        });
+      return;
+    }
+
     res.writeHead(404);
     res.end();
   });

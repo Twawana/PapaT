@@ -214,6 +214,12 @@ export default function MainScreen() {
           onDetailsVisibleChange={setConnectionDetailsVisible}
         />
 
+        {connection.backgroundContinued && !connection.isConnected ? (
+          <Text style={styles.backgroundHint}>
+            PC tasks keep running in the background. Reconnecting…
+          </Text>
+        ) : null}
+
         <View style={[styles.content, { paddingBottom: contentInset }]}>
           {connection.isConnected ? (
             navigation.tabs.map((tab) => (
@@ -280,6 +286,12 @@ function createStyles(colors: ThemeColors) {
       fontSize: 28,
       fontWeight: "700" as const,
       color: colors.textPrimary,
+    },
+    backgroundHint: {
+      color: colors.warning,
+      fontSize: 12,
+      marginBottom: 8,
+      lineHeight: 16,
     },
     content: {
       flex: 1,

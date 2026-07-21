@@ -232,12 +232,15 @@ export default function AgentScreen({
   );
 
   const cookingSubtitle = useMemo(() => {
+    if (!isConnected && chat.runningOnPc) {
+      return "Still running on your PC — reopen the app anytime to check progress";
+    }
     const lastTool = [...chat.messages].reverse().find((m) => m.kind === "tool");
     if (lastTool && lastTool.kind === "tool" && lastTool.status === "running") {
-      return `Running ${lastTool.name} on your PC`;
+      return `Running ${lastTool.name} on your PC — safe to leave the app`;
     }
-    return "Thinking and fixing on your PC — hang tight";
-  }, [chat.messages]);
+    return "Running on your PC — you can leave the app; work continues";
+  }, [chat.messages, chat.runningOnPc, isConnected]);
 
   const handleSend = () => {
     onError(null);
@@ -344,8 +347,8 @@ export default function AgentScreen({
         <View style={styles.pcRunningBanner}>
           <Text style={styles.pcRunningText}>
             {isConnected
-              ? "Running on your PC — you can leave this screen"
-              : "Still running on your PC — reconnect to see updates"}
+              ? "Running on your PC — leave the app anytime; work keeps going"
+              : "Still running on your PC — reconnecting when you return"}
           </Text>
         </View>
       ) : null}

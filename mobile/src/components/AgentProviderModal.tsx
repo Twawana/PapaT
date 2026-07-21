@@ -14,6 +14,7 @@ import { useThemedStyles } from "../hooks/useThemedStyles";
 import { ThemeColors } from "../theme/colors";
 import { titusClient } from "../services/websocket";
 import { AgentEmailLoginModal } from "./AgentEmailLoginModal";
+import { AgentAddModal } from "./AgentAddModal";
 import { AgentProviderId, AgentProviderStatus, ServerMessage } from "../types/protocol";
 import { errorMessage } from "../utils/errors";
 import { dismissKeyboard } from "../utils/keyboard";
@@ -68,6 +69,7 @@ export function AgentProviderModal({
   const [loginProviderLabel, setLoginProviderLabel] = useState("");
   const [loginUrl, setLoginUrl] = useState("");
   const [loginModalVisible, setLoginModalVisible] = useState(false);
+  const [addModalVisible, setAddModalVisible] = useState(false);
 
   const applyProviderState = useCallback(
     (nextProviders: AgentProviderStatus[], nextActiveId: AgentProviderId) => {
@@ -301,13 +303,25 @@ export function AgentProviderModal({
           <View style={styles.headerText}>
             <Text style={styles.title}>Agent account</Text>
             <Text style={styles.subtitle}>
-              Switch which AI runs on your PC. API keys are stored on the host only.
+              Switch which AI runs on your PC. Add an agent to enter login or path details.
             </Text>
           </View>
           <Pressable onPress={onClose} hitSlop={8}>
             <Text style={styles.close}>Close</Text>
           </Pressable>
         </View>
+
+        <Pressable
+          style={[styles.addAgentBtn, (!isConnected || loading) && styles.btnDisabled]}
+          onPress={() => {
+            onError(null);
+            setAddModalVisible(true);
+          }}
+          disabled={!isConnected || loading}
+        >
+          <Ionicons name="add-circle-outline" size={18} color={colors.onPrimary} />
+          <Text style={styles.addAgentBtnText}>Add agent</Text>
+        </Pressable>
 
         {toast ? (
           <View style={styles.toast}>
@@ -479,9 +493,8 @@ export function AgentProviderModal({
           })}
 
           <Text style={styles.footerNote}>
-            Use Email & password to sign in on your phone (opens the provider sign-in page). Set
-            path when the CLI is installed somewhere Titus cannot find automatically. API keys are
-            stored on your PC.
+            Tap Add agent for a guided setup (email login, API key, or CLI path). Use Email &
+            password on a card to sign in quickly. API keys and paths are stored on your PC only.
           </Text>
         </ScrollView>
 
@@ -505,6 +518,19 @@ export function AgentProviderModal({
       loginUrl={loginUrl}
       onClose={handleLoginClose}
       onSignedIn={handleLoginSignedIn}
+    />
+
+    <AgentAddModal
+      visible={addModalVisible}
+      onClose={() => setAddModalVisible(false)}
+      isConnected={isConnected}
+      providers={providers}
+      onError={onError}
+      onConfigured={(nextProviders, nextActiveId, message) => {
+        applyProviderState(nextProviders, nextActiveId);
+        setToast(message);
+        void refresh(true);
+      }}
     />
     </>
   );
@@ -543,6 +569,21 @@ function createStyles(colors: ThemeColors) {
       color: colors.link,
       fontSize: 16,
       fontWeight: "600" as const,
+    },
+    addAgentBtn: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      gap: 8,
+      backgroundColor: colors.buttonPrimary,
+      borderRadius: 12,
+      paddingVertical: 12,
+      marginBottom: 12,
+    },
+    addAgentBtnText: {
+      color: colors.onPrimary,
+      fontWeight: "700" as const,
+      fontSize: 14,
     },
     toast: {
       flexDirection: "row" as const,

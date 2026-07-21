@@ -223,7 +223,7 @@ export function CookingBanner({ visible, subtitle }: Props) {
           </View>
         </View>
         <Text style={styles.subtitle}>
-          {subtitle ?? "Fixing things on your PC — hang tight"}
+          {subtitle ?? "Running on your PC — safe to leave the app"}
         </Text>
       </View>
     </Animated.View>

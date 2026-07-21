@@ -33,6 +33,9 @@ export class TitusClient {
   private pendingConnect: ConnectOptions | null = null;
   private lastConnectHost = "";
   private lastConnectPort = 0;
+  private lastConnectOptions: ConnectOptions = {};
+  private intentionalDisconnect = false;
+  private keepAliveTimer: ReturnType<typeof setInterval> | null = null;
   private messageListeners = new Set<MessageHandler>();
   private statusListeners = new Set<StatusHandler>();
   private pendingRequests = new Map<string, PendingRequest>();
@@ -63,11 +66,17 @@ export class TitusClient {
   private _legacyCleanup: (() => void) | null = null;
 
   connect(host: string, port: number, options: ConnectOptions = {}): void {
-    this.disconnect();
+    this.intentionalDisconnect = false;
+    this.stopKeepAlive();
+    this.disconnectSocketOnly();
 
-    const trimmed = host.trim().replace(/^ws:\/\//, "").replace(/^wss:\/\//, "");
+    const trimmed = host
+      .trim()
+      .replace(/^ws:\/\//, "")
+      .replace(/^wss:\/\//, "");
     this.lastConnectHost = trimmed;
     this.lastConnectPort = port;
+    this.lastConnectOptions = { ...options };
     this.url = buildWebSocketUrl(trimmed, port);
     this.authenticated = false;
     this.pendingConnect = options;
@@ -100,10 +109,19 @@ export class TitusClient {
         if (message.type === "auth_ok") {
           this.authenticated = true;
           this.pendingConnect = null;
+          // Prefer token for future auto-reconnect after pairing.
+          if (message.token) {
+            this.lastConnectOptions = {
+              token: message.token,
+              deviceName: this.lastConnectOptions.deviceName,
+            };
+          }
+          this.startKeepAlive();
         }
 
         if (message.type === "connected" && message.authenticated !== false) {
           this.authenticated = true;
+          this.startKeepAlive();
         }
 
         if (message.type === "auth_error") {
@@ -125,19 +143,83 @@ export class TitusClient {
 
     ws.onclose = () => {
       this.ws = null;
+      this.authenticated = false;
+      this.stopKeepAlive();
       this.rejectAllPending("Connection closed");
       this.emitStatus("close");
     };
   }
 
-  disconnect(): void {
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
+  /** Reconnect using the last successful host/port/credentials. */
+  reconnect(): boolean {
+    if (!this.lastConnectHost || !this.lastConnectPort) {
+      return false;
     }
+    if (!this.lastConnectOptions.token && !this.lastConnectOptions.pairingCode) {
+      return false;
+    }
+    this.connect(this.lastConnectHost, this.lastConnectPort, this.lastConnectOptions);
+    return true;
+  }
+
+  canReconnect(): boolean {
+    return Boolean(
+      this.lastConnectHost &&
+        this.lastConnectPort &&
+        (this.lastConnectOptions.token || this.lastConnectOptions.pairingCode)
+    );
+  }
+
+  updateReconnectToken(token: string, deviceName?: string): void {
+    this.lastConnectOptions = {
+      token,
+      deviceName: deviceName ?? this.lastConnectOptions.deviceName,
+    };
+  }
+
+  disconnect(): void {
+    this.intentionalDisconnect = true;
+    this.stopKeepAlive();
+    this.disconnectSocketOnly();
     this.authenticated = false;
     this.pendingConnect = null;
     this.rejectAllPending("Disconnected");
+  }
+
+  private disconnectSocketOnly(): void {
+    if (this.ws) {
+      try {
+        this.ws.onclose = null;
+        this.ws.onerror = null;
+        this.ws.onmessage = null;
+        this.ws.onopen = null;
+        this.ws.close();
+      } catch {
+        // ignore
+      }
+      this.ws = null;
+    }
+  }
+
+  private startKeepAlive(): void {
+    this.stopKeepAlive();
+    this.keepAliveTimer = setInterval(() => {
+      if (!this.isSocketOpen()) {
+        return;
+      }
+      try {
+        this.ping();
+      } catch {
+        // ignore
+      }
+    }, 20_000);
+  }
+
+  private stopKeepAlive(): void {
+    if (this.keepAliveTimer) {
+      clearInterval(this.keepAliveTimer);
+      this.keepAliveTimer = null;
+    }
   }
 
   isConnected(): boolean {
