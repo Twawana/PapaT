@@ -74,6 +74,59 @@ export function ConnectionBar({
       fontSize: 12,
       fontWeight: "600",
     },
+
+    // --- QR-scan-first primary state ---
+    qrPrimary: {
+      alignItems: "center" as const,
+      paddingVertical: 16,
+      paddingHorizontal: 4,
+      marginBottom: 8,
+    },
+    qrPrimaryBtn: {
+      backgroundColor: c.accent,
+      borderRadius: 14,
+      paddingVertical: 16,
+      paddingHorizontal: 32,
+      alignItems: "center" as const,
+      width: "100%" as const,
+      maxWidth: 320,
+    },
+    qrPrimaryBtnText: {
+      color: c.onPrimary,
+      fontSize: 18,
+      fontWeight: "800",
+    },
+    qrPrimaryHint: {
+      color: c.textMuted,
+      fontSize: 13,
+      marginTop: 8,
+      textAlign: "center" as const,
+    },
+    pairedHint: {
+      color: c.textMuted,
+      fontSize: 13,
+      marginBottom: 12,
+      textAlign: "center" as const,
+    },
+    pairedConnectRow: {
+      flexDirection: "row" as const,
+      gap: 8,
+      justifyContent: "center" as const,
+      marginBottom: 12,
+    },
+
+    // --- Manual setup section ---
+    manualToggle: {
+      alignSelf: "center" as const,
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      marginBottom: 8,
+    },
+    manualToggleText: {
+      color: c.link,
+      fontSize: 13,
+      fontWeight: "600",
+    },
     connectionBar: {
       flexDirection: "row",
       gap: 8,
@@ -203,9 +256,12 @@ export function ConnectionBar({
 
   const [qrVisible, setQrVisible] = useState(false);
   const [manualCode, setManualCode] = useState("");
+  const [manualOpen, setManualOpen] = useState(false);
 
   const isConnected = connectionStatus === "connected";
   const showDetails = !isConnected || detailsVisible;
+  const busy =
+    connectionStatus === "connecting" || connectionStatus === "authenticating";
 
   useEffect(() => {
     if (!isConnected) {
@@ -222,9 +278,6 @@ export function ConnectionBar({
           ? colors.error
           : colors.textMuted;
 
-  const busy =
-    connectionStatus === "connecting" || connectionStatus === "authenticating";
-
   const statusLabel =
     isConnected && serverInfo
       ? `Connected to ${serverInfo}${deviceName ? ` · ${deviceName}` : ""}${vscodeConnected ? " · VS Code" : ""}`
@@ -234,6 +287,7 @@ export function ConnectionBar({
 
   return (
     <View>
+      {/* Compact status row when connected */}
       {isConnected ? (
         <Pressable
           style={styles.compactRow}
@@ -251,94 +305,187 @@ export function ConnectionBar({
 
       {showDetails ? (
         <>
-          <View style={styles.connectionBar}>
-            <TextInput
-              style={[styles.input, styles.hostInput]}
-              value={host}
-              onChangeText={onHostChange}
-              placeholder={`PC IP (e.g. ${DEV_LOCAL_IP})`}
-              placeholderTextColor={colors.placeholder}
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="done"
-              onSubmitEditing={Keyboard.dismiss}
-            />
-            <TextInput
-              style={[styles.input, styles.portInput]}
-              value={port}
-              onChangeText={onPortChange}
-              placeholder={String(HOST_SERVER_PORT)}
-              placeholderTextColor={colors.placeholder}
-              keyboardType="number-pad"
-              returnKeyType="done"
-              onSubmitEditing={Keyboard.dismiss}
-            />
-            {isConnected ? (
-              <Pressable style={styles.disconnectBtn} onPress={onDisconnect}>
+          {/* ====== NOT CONNECTED: QR-first primary ====== */}
+          {!isConnected && (
+            <>
+              {/* If already paired (has saved token), show a Connect button and Forget */}
+              {isPaired ? (
+                <>
+                  <Text style={styles.pairedHint}>
+                    Previously paired with this PC. Tap Connect to reconnect, or
+                    scan a new QR code.
+                  </Text>
+                  <View style={styles.pairedConnectRow}>
+                    <Pressable
+                      style={[styles.connectBtn, busy && styles.btnDisabled]}
+                      onPress={onConnect}
+                      disabled={busy}
+                    >
+                      {busy ? (
+                        <ActivityIndicator
+                          color={colors.spinnerOnAccent}
+                          size="small"
+                        />
+                      ) : (
+                        <Text style={styles.connectText}>Connect</Text>
+                      )}
+                    </Pressable>
+                    <Pressable
+                      style={styles.scanBtn}
+                      onPress={() => setQrVisible(true)}
+                    >
+                      <Text style={styles.scanBtnText}>Scan new QR</Text>
+                    </Pressable>
+                    <Pressable style={styles.forgetBtn} onPress={onForgetDevice}>
+                      <Text style={styles.forgetBtnText}>Forget</Text>
+                    </Pressable>
+                  </View>
+                </>
+              ) : (
+                /* Not paired — big QR button as primary action */
+                <View style={styles.qrPrimary}>
+                  <Pressable
+                    style={[styles.qrPrimaryBtn, busy && styles.btnDisabled]}
+                    onPress={() => setQrVisible(true)}
+                    disabled={busy}
+                  >
+                    {busy ? (
+                      <ActivityIndicator
+                        color={colors.spinnerOnAccent}
+                        size="small"
+                      />
+                    ) : (
+                      <Text style={styles.qrPrimaryBtnText}>
+                        Scan QR Code to Connect
+                      </Text>
+                    )}
+                  </Pressable>
+                  <Text style={styles.qrPrimaryHint}>
+                    Open PapaT on your PC, then scan the QR code shown there.
+                    Phone and PC must be on the same Wi-Fi.
+                  </Text>
+                </View>
+              )}
+
+              {/* Manual setup — available for first pair and to fix IP after DHCP change */}
+              <Pressable
+                style={styles.manualToggle}
+                onPress={() => setManualOpen(!manualOpen)}
+              >
+                <Text style={styles.manualToggleText}>
+                  {manualOpen
+                    ? "Hide manual setup"
+                    : isPaired
+                      ? "Change PC address"
+                      : "Enter IP & code manually"}
+                </Text>
+              </Pressable>
+            </>
+          )}
+
+          {/* ====== Manual setup fields (collapsible) ====== */}
+          {manualOpen && !isConnected && (
+            <>
+              <View style={styles.connectionBar}>
+                <TextInput
+                  style={[styles.input, styles.hostInput]}
+                  value={host}
+                  onChangeText={onHostChange}
+                  placeholder={`PC IP (e.g. ${DEV_LOCAL_IP})`}
+                  placeholderTextColor={colors.placeholder}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  onSubmitEditing={Keyboard.dismiss}
+                />
+                <TextInput
+                  style={[styles.input, styles.portInput]}
+                  value={port}
+                  onChangeText={onPortChange}
+                  placeholder={String(HOST_SERVER_PORT)}
+                  placeholderTextColor={colors.placeholder}
+                  keyboardType="number-pad"
+                  returnKeyType="done"
+                  onSubmitEditing={Keyboard.dismiss}
+                />
+                {isPaired ? (
+                  <Pressable
+                    style={[styles.connectBtn, busy && styles.btnDisabled]}
+                    onPress={onConnect}
+                    disabled={busy}
+                  >
+                    {busy ? (
+                      <ActivityIndicator
+                        color={colors.spinnerOnAccent}
+                        size="small"
+                      />
+                    ) : (
+                      <Text style={styles.connectText}>Connect</Text>
+                    )}
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    style={[styles.disconnectBtn]}
+                    onPress={() => setQrVisible(true)}
+                  >
+                    <Text style={styles.disconnectText}>Scan QR</Text>
+                  </Pressable>
+                )}
+              </View>
+
+              {!isPaired ? (
+              <View style={styles.codeRow}>
+                <TextInput
+                  style={[styles.input, styles.codeInput]}
+                  value={manualCode}
+                  onChangeText={(text) => setManualCode(text.toUpperCase())}
+                  placeholder="6-char code from PapaT desktop"
+                  placeholderTextColor={colors.placeholder}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  maxLength={6}
+                />
+                <Pressable
+                  style={[
+                    styles.codeBtn,
+                    (busy || manualCode.trim().length < 6) && styles.btnDisabled,
+                  ]}
+                  onPress={() => {
+                    onError(null);
+                    onPairWithCode(manualCode);
+                  }}
+                  disabled={busy || manualCode.trim().length < 6}
+                >
+                  <Text style={styles.codeBtnText}>Use code</Text>
+                </Pressable>
+              </View>
+              ) : (
+                <Text style={styles.pairedHint}>
+                  Update the IP if your PC address changed, then tap Connect.
+                  Or scan a new QR to re-pair.
+                </Text>
+              )}
+            </>
+          )}
+
+          {/* ====== Connected state: show disconnect and forget buttons ====== */}
+          {isConnected && (
+            <View style={styles.secondaryRow}>
+              <Pressable
+                style={[styles.disconnectBtn, { flex: 1 }]}
+                onPress={onDisconnect}
+              >
                 <Text style={styles.disconnectText}>Disconnect</Text>
               </Pressable>
-            ) : (
-              <Pressable
-                style={[styles.connectBtn, busy && styles.btnDisabled]}
-                onPress={isPaired ? onConnect : () => setQrVisible(true)}
-                disabled={busy}
-              >
-                {busy ? (
-                  <ActivityIndicator color={colors.spinnerOnAccent} size="small" />
-                ) : (
-                  <Text style={styles.connectText}>
-                    {isPaired ? "Connect" : "Pair"}
-                  </Text>
-                )}
-              </Pressable>
-            )}
-          </View>
-
-          {!isPaired && !isConnected ? (
-            <View style={styles.codeRow}>
-              <TextInput
-                style={[styles.input, styles.codeInput]}
-                value={manualCode}
-                onChangeText={(text) => setManualCode(text.toUpperCase())}
-                placeholder="6-char code from PC"
-                placeholderTextColor={colors.placeholder}
-                autoCapitalize="characters"
-                autoCorrect={false}
-                maxLength={6}
-              />
-              <Pressable
-                style={[
-                  styles.codeBtn,
-                  (busy || manualCode.trim().length < 6) && styles.btnDisabled,
-                ]}
-                onPress={() => {
-                  onError(null);
-                  onPairWithCode(manualCode);
-                }}
-                disabled={busy || manualCode.trim().length < 6}
-              >
-                <Text style={styles.codeBtnText}>Use code</Text>
-              </Pressable>
-            </View>
-          ) : null}
-
-          <View style={styles.secondaryRow}>
-            <Pressable
-              style={[styles.scanBtn, busy && styles.btnDisabled]}
-              onPress={() => setQrVisible(true)}
-              disabled={busy}
-            >
-              <Text style={styles.scanBtnText}>Scan QR</Text>
-            </Pressable>
-            {isPaired ? (
               <Pressable style={styles.forgetBtn} onPress={onForgetDevice}>
                 <Text style={styles.forgetBtnText}>Forget device</Text>
               </Pressable>
-            ) : null}
-          </View>
+            </View>
+          )}
         </>
       ) : null}
 
+      {/* Status indicator + error */}
       {!isConnected ? (
         <View style={styles.statusRow}>
           <View style={[styles.dot, { backgroundColor: statusColor }]} />
@@ -366,3 +513,4 @@ export function ConnectionBar({
     </View>
   );
 }
+

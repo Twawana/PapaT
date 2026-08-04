@@ -6,3 +6,8 @@ mobile/node_modules/
 *.log
 .env
 .DS_Store
+node_modules/
+.expo/
+dist/
+build/
+.env

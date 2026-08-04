@@ -125,6 +125,12 @@ export class TitusClient {
         }
 
         if (message.type === "auth_error") {
+          // One-shot pairing codes must not be retried by soft-reconnect.
+          if (this.lastConnectOptions.pairingCode && !this.lastConnectOptions.token) {
+            this.lastConnectOptions = {
+              deviceName: this.lastConnectOptions.deviceName,
+            };
+          }
           this.emitStatus("error", message.message);
         }
 
@@ -155,18 +161,22 @@ export class TitusClient {
     if (!this.lastConnectHost || !this.lastConnectPort) {
       return false;
     }
-    if (!this.lastConnectOptions.token && !this.lastConnectOptions.pairingCode) {
+    if (!this.lastConnectOptions.token) {
       return false;
     }
-    this.connect(this.lastConnectHost, this.lastConnectPort, this.lastConnectOptions);
+    this.connect(this.lastConnectHost, this.lastConnectPort, {
+      token: this.lastConnectOptions.token,
+      deviceName: this.lastConnectOptions.deviceName,
+    });
     return true;
   }
 
   canReconnect(): boolean {
+    // Only auto-reconnect with a saved device token — never retry one-shot pairing codes.
     return Boolean(
       this.lastConnectHost &&
         this.lastConnectPort &&
-        (this.lastConnectOptions.token || this.lastConnectOptions.pairingCode)
+        this.lastConnectOptions.token
     );
   }
 
@@ -174,6 +184,15 @@ export class TitusClient {
     this.lastConnectOptions = {
       token,
       deviceName: deviceName ?? this.lastConnectOptions.deviceName,
+    };
+  }
+
+  /** Drop a failed one-shot pairing code so soft-reconnect cannot spam it. */
+  clearPairingCode(): void {
+    if (!this.lastConnectOptions.pairingCode) return;
+    this.lastConnectOptions = {
+      token: this.lastConnectOptions.token,
+      deviceName: this.lastConnectOptions.deviceName,
     };
   }
 

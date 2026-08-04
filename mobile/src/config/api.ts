@@ -61,13 +61,25 @@ export function formatConnectionError(
     return detail;
   }
 
+  // Auth/pairing messages should surface as-is.
+  if (
+    detail &&
+    (/pairing/i.test(detail) ||
+      /invalid/i.test(detail) ||
+      /expired/i.test(detail) ||
+      /revoked/i.test(detail))
+  ) {
+    return detail;
+  }
+
   const hint = isLocalhostHost(host)
     ? " Replace localhost with your PC's Wi-Fi IP from the PapaT desktop app."
     : "";
 
   const base =
     `Cannot reach PapaT host at ${buildWebSocketUrl(host, port)}.` +
-    ` Install and open PapaT on your PC, use the same Wi-Fi, and enter the IP shown in the desktop app.${hint}`;
+    ` Open PapaT on your PC, use the same Wi-Fi (not guest/isolated),` +
+    ` and allow inbound TCP port ${port} in Windows Firewall if prompted.${hint}`;
 
   return detail && !detail.startsWith("Cannot reach") ? `${base} (${detail})` : base;
 }
@@ -77,9 +89,9 @@ export const CONNECTION_HELP = {
   suggestedHost: DEV_LOCAL_IP,
   steps: [
     "Install PapaT on your PC and open it (Start Menu > PapaT)",
-    "Enter the PC address shown in the PapaT desktop window",
-    `Use port ${HOST_SERVER_PORT}`,
-    "Connect phone and PC to the same Wi-Fi network",
-    "Scan the QR code or enter the pairing code from the desktop app",
+    "Connect phone and PC to the same Wi-Fi (avoid guest / AP isolation networks)",
+    "Scan the QR code shown in the PapaT desktop window",
+    `If it fails to connect, allow inbound TCP port ${HOST_SERVER_PORT} in Windows Firewall`,
+    "Or enter the PC address and 6-character code manually from the desktop app",
   ],
 } as const;

@@ -59,9 +59,8 @@ export function ServerOfflinePanel({ connectionStatus }: Props) {
       <View style={styles.card}>
         <Text style={styles.title}>Connect to your PC</Text>
         <Text style={styles.subtitle}>
-          Titus talks to the PapaT host on your computer over Wi-Fi (port{" "}
-          {CONNECTION_HELP.port}). Pair using the QR code in the connection bar
-          above.
+          Tap <Text style={{ fontWeight: "700" }}>Scan QR Code to Connect</Text>{" "}
+          and point your camera at the QR in the PapaT desktop app.
         </Text>
         {CONNECTION_HELP.steps.map((step, index) => (
           <Text key={step} style={styles.step}>

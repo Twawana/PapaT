@@ -78,6 +78,12 @@
         color: var(--accent);
       }
 
+      .value.muted {
+        color: var(--muted);
+        font-size: 0.8rem;
+        font-weight: 400;
+      }
+
       .pill {
         font-size: 0.85rem;
         padding: 4px 10px;
@@ -228,6 +234,14 @@
           <span class="label">PC address (for phone)</span>
           <span class="value" id="lan-ip">—</span>
         </div>
+        <div class="row" id="alt-ips-row" hidden>
+          <span class="label">Other IPs</span>
+          <span class="value muted" id="alt-ips">—</span>
+        </div>
+        <div class="row" id="lan-warning-row" hidden>
+          <span class="label">Network</span>
+          <span class="value muted" id="lan-warning">—</span>
+        </div>
         <div class="row">
           <span class="label">Port</span>
           <span class="value" id="port">3847</span>
@@ -256,19 +270,24 @@
 
       <ol class="steps">
         <li>Open the PapaT app on your phone.</li>
-        <li>Make sure phone and PC are on the <strong>same Wi-Fi</strong>.</li>
-        <li>Scan this QR code, or enter the IP, port, and pairing code.</li>
-        <li>If the code expires, click <strong>Refresh code</strong>.</li>
+        <li>Make sure phone and PC are on the <strong>same Wi-Fi</strong> (not a guest or client-isolated network).</li>
+        <li>Tap <strong>Scan QR Code</strong> in the app and point it at this screen.</li>
+        <li>If connection fails, allow inbound TCP port <strong>3847</strong> in Windows Firewall when prompted.</li>
+        <li>You'll be connected instantly — the QR already contains the IP, port, and pairing code.</li>
       </ol>
     </main>
 
     <script>
-      const BACKEND_PORT = 3847;
-      const PAIRING_URL = `http://127.0.0.1:${BACKEND_PORT}/api/pairing`;
-      const REFRESH_URL = `http://127.0.0.1:${BACKEND_PORT}/api/pairing/refresh`;
+      const DEFAULT_BACKEND_PORT = 3847;
+      const STATUS_URL = "/api/status";
+      const DEFAULT_PAIRING_API = `http://127.0.0.1:${DEFAULT_BACKEND_PORT}/api/pairing`;
 
       const backendStatus = document.getElementById("backend-status");
       const lanIpEl = document.getElementById("lan-ip");
+      const altIpsRow = document.getElementById("alt-ips-row");
+      const altIpsEl = document.getElementById("alt-ips");
+      const lanWarningRow = document.getElementById("lan-warning-row");
+      const lanWarningEl = document.getElementById("lan-warning");
       const portEl = document.getElementById("port");
       const pairCodeEl = document.getElementById("pair-code");
       const expiresEl = document.getElementById("expires");
@@ -278,10 +297,13 @@
       const copyIpBtn = document.getElementById("copy-ip");
       const copyCodeBtn = document.getElementById("copy-code");
 
+      let pairingApiUrl = DEFAULT_PAIRING_API;
       let latestIp = "";
       let latestCode = "";
       let expiresAt = null;
       let countdownTimer = null;
+      let autoRefreshTimer = null;
+      let refreshInFlight = false;
 
       function setBackendStatus(ok, text) {
         backendStatus.textContent = text;
@@ -295,6 +317,30 @@
         return `${minutes}:${seconds}`;
       }
 
+      function ensurePairingApi() {
+        if (!pairingApiUrl) {
+          pairingApiUrl = DEFAULT_PAIRING_API;
+        }
+        return pairingApiUrl;
+      }
+
+      function scheduleAutoRefresh() {
+        if (autoRefreshTimer) {
+          clearTimeout(autoRefreshTimer);
+          autoRefreshTimer = null;
+        }
+
+        if (!expiresAt || !ensurePairingApi()) {
+          return;
+        }
+
+        const delay = Math.max(250, expiresAt - Date.now() + 250);
+        autoRefreshTimer = setTimeout(() => {
+          autoRefreshTimer = null;
+          void refreshPairing();
+        }, delay);
+      }
+
       function updateCountdown() {
         if (!expiresAt) {
           expiresEl.textContent = "Expires in —";
@@ -304,8 +350,13 @@
 
         const remaining = expiresAt - Date.now();
         if (remaining <= 0) {
-          expiresEl.textContent = "Expired — click Refresh code";
+          expiresEl.textContent = refreshInFlight
+            ? "Expired — refreshing…"
+            : "Expired — click Refresh code";
           expiresEl.classList.add("expired");
+          if (!refreshInFlight && !autoRefreshTimer) {
+            void refreshPairing();
+          }
           return;
         }
 
@@ -313,12 +364,39 @@
         expiresEl.classList.toggle("expired", remaining < 30_000);
       }
 
+      function applyLanIps(primary, extras, warning) {
+        latestIp = primary || "—";
+        lanIpEl.textContent = latestIp;
+
+        const others = Array.isArray(extras)
+          ? extras.filter((ip) => ip && ip !== primary)
+          : [];
+        if (others.length > 0) {
+          altIpsEl.textContent = others.join(", ");
+          altIpsRow.hidden = false;
+        } else {
+          altIpsEl.textContent = "—";
+          altIpsRow.hidden = true;
+        }
+
+        if (warning) {
+          lanWarningEl.textContent = warning;
+          lanWarningRow.hidden = false;
+        } else if (primary === "127.0.0.1") {
+          lanWarningEl.textContent =
+            "No Wi-Fi/LAN IP found. Connect this PC to Wi-Fi, then tap Refresh code.";
+          lanWarningRow.hidden = false;
+        } else {
+          lanWarningEl.textContent = "—";
+          lanWarningRow.hidden = true;
+        }
+      }
+
       function applyPairing(data) {
         if (!data) return;
 
-        latestIp = data.lanIp || "—";
-        lanIpEl.textContent = latestIp;
-        portEl.textContent = String(data.port || BACKEND_PORT);
+        applyLanIps(data.lanIp, data.lanIps, data.lanWarning);
+        portEl.textContent = String(data.port || DEFAULT_BACKEND_PORT);
 
         if (data.code) {
           latestCode = data.code;
@@ -327,6 +405,7 @@
 
         expiresAt = data.expiresAt || null;
         updateCountdown();
+        scheduleAutoRefresh();
 
         if (data.qrDataUrl) {
           qrImage.src = data.qrDataUrl;
@@ -344,7 +423,8 @@
       }
 
       async function fetchPairing() {
-        const res = await fetch(PAIRING_URL, { cache: "no-store" });
+        const url = ensurePairingApi();
+        const res = await fetch(url, { cache: "no-store" });
         if (!res.ok) {
           throw new Error("Pairing API unavailable");
         }
@@ -352,10 +432,14 @@
       }
 
       async function refreshPairing() {
+        if (refreshInFlight) return;
+        refreshInFlight = true;
         refreshBtn.disabled = true;
         refreshBtn.textContent = "Refreshing…";
         try {
-          const res = await fetch(REFRESH_URL, {
+          const base = ensurePairingApi();
+          const refreshUrl = base.replace(/\/api\/pairing$/, "/api/pairing/refresh");
+          const res = await fetch(refreshUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
           });
@@ -368,7 +452,16 @@
         } catch {
           expiresEl.textContent = "Could not refresh — is the host running?";
           expiresEl.classList.add("expired");
+          // Retry shortly so a brief host blip does not strand the QR.
+          if (autoRefreshTimer) {
+            clearTimeout(autoRefreshTimer);
+          }
+          autoRefreshTimer = setTimeout(() => {
+            autoRefreshTimer = null;
+            void refreshPairing();
+          }, 5_000);
         } finally {
+          refreshInFlight = false;
           refreshBtn.disabled = false;
           refreshBtn.textContent = "Refresh code";
         }
@@ -376,10 +469,30 @@
 
       async function refreshStatus() {
         try {
+          const res = await fetch(STATUS_URL, { cache: "no-store" });
+          if (!res.ok) {
+            throw new Error("Status API unavailable");
+          }
+
+          const status = await res.json();
+          applyLanIps(status.lanIp, status.lanIps, null);
+          portEl.textContent = String(status.port || DEFAULT_BACKEND_PORT);
+          pairingApiUrl = status.pairingApi || DEFAULT_PAIRING_API;
+
           const data = await fetchPairing();
           applyPairing(data);
           setBackendStatus(true, "Online");
         } catch {
+          // Status proxy may be down while host is up — still try pairing API.
+          try {
+            pairingApiUrl = DEFAULT_PAIRING_API;
+            const data = await fetchPairing();
+            applyPairing(data);
+            setBackendStatus(true, "Online");
+            return;
+          } catch {
+            // fall through
+          }
           setBackendStatus(false, "Offline");
           qrImage.hidden = true;
           qrPlaceholder.hidden = false;

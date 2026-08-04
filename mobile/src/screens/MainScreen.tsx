@@ -188,7 +188,7 @@ export default function MainScreen() {
         <KeyboardDismissView style={styles.flex}>
         <View style={styles.header}>
           <Pressable style={styles.titleWrap} onPress={dismissKeyboard}>
-            <Text style={styles.title}>Titus</Text>
+            <Text style={styles.title}>PapaT</Text>
           </Pressable>
           {showHeaderExtras ? <ThemeToggle /> : null}
         </View>

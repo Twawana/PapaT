@@ -67,18 +67,55 @@ export interface PairQrPayload {
 }
 
 export function parsePairQrData(raw: string): PairQrPayload | null {
-  const trimmed = raw.trim();
+  let trimmed = raw.trim().replace(/^\uFEFF/, "");
   if (!trimmed) return null;
 
+  // Some scanners URL-encode the JSON payload.
+  if (trimmed.includes("%7B") || trimmed.includes("%22")) {
+    try {
+      trimmed = decodeURIComponent(trimmed);
+    } catch {
+      // keep original
+    }
+  }
+
   try {
-    const parsed = JSON.parse(trimmed) as PairQrPayload;
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+    const host = typeof parsed.host === "string" ? parsed.host.trim() : "";
+    const code = typeof parsed.code === "string" ? parsed.code.trim() : "";
+    const portRaw = parsed.port;
+    const port =
+      typeof portRaw === "number"
+        ? portRaw
+        : typeof portRaw === "string"
+          ? Number(portRaw.trim())
+          : NaN;
+    const expiresRaw = parsed.expiresAt;
+    const expiresAt =
+      typeof expiresRaw === "number"
+        ? expiresRaw
+        : typeof expiresRaw === "string"
+          ? Number(expiresRaw)
+          : undefined;
+
     if (
       parsed?.v === 1 &&
-      typeof parsed.host === "string" &&
-      typeof parsed.port === "number" &&
-      typeof parsed.code === "string"
+      host.length > 0 &&
+      Number.isFinite(port) &&
+      port >= 1 &&
+      port <= 65535 &&
+      /^[A-Z0-9]{6}$/i.test(code)
     ) {
-      return parsed;
+      return {
+        v: 1,
+        host,
+        port,
+        code,
+        expiresAt:
+          expiresAt !== undefined && Number.isFinite(expiresAt)
+            ? expiresAt
+            : undefined,
+      };
     }
   } catch {
     // not JSON

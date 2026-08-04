@@ -119,13 +119,14 @@ export interface AuthSuccess {
 export function pairWithCode(code: string, deviceName?: string): AuthSuccess {
   const normalized = code.trim().toUpperCase();
 
-  if (!activePairing || activePairing.expiresAt <= Date.now()) {
+  // Small clock-skew grace so phone + PC clocks near expiry still succeed.
+  if (!activePairing || activePairing.expiresAt + 2000 <= Date.now()) {
     rotatePairingCode();
-    throw new Error("Pairing code expired — scan the latest QR on your PC");
+    throw new Error("Pairing code expired — tap Refresh code in the PapaT desktop app");
   }
 
   if (normalized !== activePairing.code) {
-    throw new Error("Invalid pairing code — use the code shown in your PC terminal now");
+    throw new Error("Invalid pairing code — use the code shown in the PapaT desktop app now");
   }
 
   rotatePairingCode();
@@ -202,14 +203,57 @@ export function listPairedDevices(): Array<{
 }
 
 export function getLanIp(): string {
+  const candidates = listLanIps();
+  return candidates[0] ?? "127.0.0.1";
+}
+
+/** Prefer real Wi-Fi/Ethernet over Docker/Hyper-V/VMware virtual adapters. */
+export function listLanIps(): string[] {
   const nets = os.networkInterfaces();
-  for (const iface of Object.values(nets)) {
+  const scored: { address: string; score: number }[] = [];
+
+  for (const [name, iface] of Object.entries(nets)) {
     if (!iface) continue;
-    for (const net of iface) {
-      if (net.family === "IPv4" && !net.internal) {
-        return net.address;
+    const lower = name.toLowerCase();
+    if (
+      /virtual|vethernet|vmware|vbox|hyper-v|docker|wsl|loopback|bluetooth|isatap|teredo/.test(
+        lower
+      )
+    ) {
+      continue;
+    }
+
+    for (const entry of iface) {
+      const family = entry.family as string | number;
+      const isV4 = family === "IPv4" || family === 4;
+      if (!isV4 || entry.internal) continue;
+
+      // Skip link-local / APIPA — phones cannot use these for pairing.
+      if (entry.address.startsWith("169.254.")) continue;
+
+      let score = 0;
+      if (/wi-?fi|wlan|wireless|ethernet|local area connection|en0|eth/.test(lower)) {
+        score += 50;
       }
+      if (entry.address.startsWith("192.168.")) score += 30;
+      else if (entry.address.startsWith("10.")) score += 20;
+      else if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(entry.address)) score += 5;
+      else score -= 20;
+
+      scored.push({ address: entry.address, score });
     }
   }
-  return "127.0.0.1";
+
+  scored.sort((a, b) => b.score - a.score);
+  const unique: string[] = [];
+  for (const item of scored) {
+    if (!unique.includes(item.address)) {
+      unique.push(item.address);
+    }
+  }
+  return unique;
+}
+
+export function isPairingExpired(): boolean {
+  return !activePairing || activePairing.expiresAt <= Date.now();
 }

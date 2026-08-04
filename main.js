@@ -17,17 +17,54 @@ let mainWindow = null;
 let isQuitting = false;
 let pairingCode = null;
 
-function getLanIp() {
+function listLanIps() {
   const nets = os.networkInterfaces();
-  for (const iface of Object.values(nets)) {
+  const scored = [];
+
+  for (const [name, iface] of Object.entries(nets)) {
     if (!iface) continue;
+    const lower = name.toLowerCase();
+    if (
+      /virtual|vethernet|vmware|vbox|hyper-v|docker|wsl|loopback|bluetooth|isatap|teredo/.test(
+        lower
+      )
+    ) {
+      continue;
+    }
+
     for (const entry of iface) {
-      if (entry.family === "IPv4" && !entry.internal) {
-        return entry.address;
+      const family = entry.family;
+      const isV4 = family === "IPv4" || family === 4;
+      if (!isV4 || entry.internal) continue;
+
+      // Skip link-local / APIPA — phones cannot use these for pairing.
+      if (entry.address.startsWith("169.254.")) continue;
+
+      let score = 0;
+      if (/wi-?fi|wlan|wireless|ethernet|local area connection|en0|eth/.test(lower)) {
+        score += 50;
       }
+      if (entry.address.startsWith("192.168.")) score += 30;
+      else if (entry.address.startsWith("10.")) score += 20;
+      else if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(entry.address)) score += 5;
+      else score -= 20;
+
+      scored.push({ address: entry.address, score });
     }
   }
-  return "127.0.0.1";
+
+  scored.sort((a, b) => b.score - a.score);
+  const unique = [];
+  for (const item of scored) {
+    if (!unique.includes(item.address)) {
+      unique.push(item.address);
+    }
+  }
+  return unique;
+}
+
+function getLanIp() {
+  return listLanIps()[0] || "127.0.0.1";
 }
 
 function parseBackendOutput(text) {
@@ -190,11 +227,13 @@ function startUiServer() {
     const requestPath = req.url?.split("?")[0] ?? "/";
 
     if (requestPath === "/api/status") {
-      const lanIp = getLanIp();
+      const lanIps = listLanIps();
+      const lanIp = lanIps[0] || "127.0.0.1";
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
           lanIp,
+          lanIps,
           port: BACKEND_PORT,
           pairingCode,
           wsUrl: `ws://${lanIp}:${BACKEND_PORT}`,

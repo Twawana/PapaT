@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  Linking,
   Modal,
   Pressable,
   Text,
@@ -43,7 +44,13 @@ export function QrPairModal({ visible, onClose, onScanned, onError }: Props) {
       color: c.textMuted,
       fontSize: 14,
       lineHeight: 20,
-      marginBottom: 16,
+      marginBottom: 12,
+    },
+    scanError: {
+      color: c.errorText,
+      fontSize: 14,
+      lineHeight: 20,
+      marginBottom: 12,
     },
     camera: {
       flex: 1,
@@ -68,31 +75,61 @@ export function QrPairModal({ visible, onClose, onScanned, onError }: Props) {
       paddingHorizontal: 20,
       paddingVertical: 12,
       borderRadius: 8,
+      marginBottom: 12,
     },
     permissionBtnText: {
       color: c.onPrimary,
       fontWeight: "700",
     },
+    settingsLink: {
+      color: c.link,
+      fontWeight: "600",
+      marginTop: 8,
+    },
   }));
 
   const [permission, requestPermission] = useCameraPermissions();
   const [locked, setLocked] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (visible) {
+      setLocked(false);
+      setScanError(null);
+    }
+  }, [visible]);
+
+  const lockBriefly = () => {
+    setLocked(true);
+    setTimeout(() => setLocked(false), 2000);
+  };
+
+  const showError = (message: string) => {
+    setScanError(message);
+    onError(message);
+  };
 
   const handleBarcode = ({ data }: { data: string }) => {
     if (locked) return;
 
     const payload = parsePairQrData(data);
     if (!payload) {
-      onError("Invalid Titus QR code");
+      lockBriefly();
+      showError("Invalid PapaT QR code — scan the QR shown in the PapaT desktop app");
       return;
     }
 
-    if (payload.expiresAt && payload.expiresAt <= Date.now() - 60_000) {
-      onError("QR code expired — check the latest code on your PC terminal");
+    // Allow ~2s clock skew; reject once truly expired.
+    if (payload.expiresAt && payload.expiresAt + 2000 <= Date.now()) {
+      lockBriefly();
+      showError(
+        "QR code expired — tap Refresh code in the PapaT desktop app, then scan again"
+      );
       return;
     }
 
     setLocked(true);
+    setScanError(null);
     onScanned(payload.host, payload.port, payload.code.trim().toUpperCase());
     onClose();
     setTimeout(() => setLocked(false), 1500);
@@ -109,8 +146,11 @@ export function QrPairModal({ visible, onClose, onScanned, onError }: Props) {
         </View>
 
         <Text style={styles.hint}>
-          Point your camera at the QR code shown in the Titus host terminal on your PC.
+          Point your camera at the QR code in the PapaT desktop window on your PC.
+          Phone and PC must be on the same Wi-Fi (not a guest/isolated network).
         </Text>
+
+        {scanError ? <Text style={styles.scanError}>{scanError}</Text> : null}
 
         {!permission?.granted ? (
           <View style={styles.permissionBox}>
@@ -120,6 +160,11 @@ export function QrPairModal({ visible, onClose, onScanned, onError }: Props) {
             <Pressable style={styles.permissionBtn} onPress={requestPermission}>
               <Text style={styles.permissionBtnText}>Allow camera</Text>
             </Pressable>
+            {permission && !permission.canAskAgain ? (
+              <Pressable onPress={() => void Linking.openSettings()}>
+                <Text style={styles.settingsLink}>Open Settings</Text>
+              </Pressable>
+            ) : null}
           </View>
         ) : (
           <CameraView
