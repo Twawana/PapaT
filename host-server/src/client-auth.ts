@@ -8,7 +8,14 @@ export interface ClientAuthState {
   isVscode?: boolean;
 }
 
+export interface ConnectedMobileClient {
+  deviceId: string;
+  deviceName: string;
+  connectedAt: number;
+}
+
 const clientAuth = new WeakMap<WebSocket, ClientAuthState>();
+const connectedMobileClients = new Map<WebSocket, ConnectedMobileClient>();
 
 function getState(ws: WebSocket): ClientAuthState {
   let state = clientAuth.get(ws);
@@ -33,10 +40,34 @@ export function markClientAuthenticated(
     deviceName: info.deviceName,
     isVscode: info.isVscode,
   });
+
+  if (!info.isVscode) {
+    connectedMobileClients.set(ws, {
+      deviceId: info.deviceId,
+      deviceName: info.deviceName,
+      connectedAt: Date.now(),
+    });
+  }
 }
 
 export function clearClientAuth(ws: WebSocket): void {
   clientAuth.delete(ws);
+  connectedMobileClients.delete(ws);
+}
+
+export function listConnectedMobileClients(): ConnectedMobileClient[] {
+  const clients: ConnectedMobileClient[] = [];
+
+  for (const [ws, info] of connectedMobileClients) {
+    if (ws.readyState !== WebSocket.OPEN) {
+      connectedMobileClients.delete(ws);
+      continue;
+    }
+    clients.push(info);
+  }
+
+  clients.sort((a, b) => a.connectedAt - b.connectedAt);
+  return clients;
 }
 
 export function isLocalConnection(req: IncomingMessage | undefined): boolean {

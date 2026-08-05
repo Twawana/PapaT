@@ -17,6 +17,7 @@ export interface NavigationContext {
   onError: (message: string | null) => void;
   onOpenInEditor: (path: string) => void;
   selectTab: (tab: TabId) => void;
+  activeTab: TabId;
 }
 
 export interface NavigationTabConfig {
@@ -81,6 +82,7 @@ const ALL_TABS: NavigationTabConfig[] = [
         workspacePath={ctx.workspacePath}
         workspaceName={ctx.workspaceName}
         onError={ctx.onError}
+        isActive={ctx.activeTab === "code"}
       />
     ),
   },

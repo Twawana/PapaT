@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Modal,
   Platform,
@@ -15,16 +14,17 @@ import { titusClient } from "../services/websocket";
 import { dismissKeyboard, keyboardPersistTaps } from "../utils/keyboard";
 import { BrowseEntry, BrowseRoot, FileEntry } from "../types/protocol";
 import {
-  dirname,
   isAbsolutePcPath,
+  isPathRoot,
   joinPath,
+  normalizePath,
   parentPath,
   pathLabel,
 } from "../utils/paths";
 import { useTheme } from "../context/ThemeContext";
-import { copyPathToClipboard } from "../utils/clipboard";
 import { useTabBarInset } from "../hooks/useTabBarInset";
 import { useThemedStyles } from "../hooks/useThemedStyles";
+import { useFileEntryOperations } from "../hooks/useFileEntryOperations";
 
 interface Props {
   isConnected: boolean;
@@ -39,12 +39,6 @@ function formatSize(bytes?: number): string {
   if (bytes === undefined) return "";
   if (bytes < 1024) return `${bytes} B`;
   return `${(bytes / 1024).toFixed(1)} KB`;
-}
-
-function driveRoot(path: string): string {
-  const normalized = path.replace(/\\/g, "/");
-  const match = normalized.match(/^([A-Za-z]:)/);
-  return match ? `${match[1]}/` : path;
 }
 
 function breadcrumbSegments(current: string): { label: string; path: string }[] {
@@ -405,9 +399,8 @@ export default function FilesScreen({
   const [openingVscode, setOpeningVscode] = useState(false);
 
   const [promptVisible, setPromptVisible] = useState(false);
-  const [promptKind, setPromptKind] = useState<"file" | "folder" | "rename">("file");
+  const [promptKind, setPromptKind] = useState<"file" | "folder">("file");
   const [promptName, setPromptName] = useState("");
-  const [renameTarget, setRenameTarget] = useState<FileEntry | null>(null);
 
   const [browseVisible, setBrowseVisible] = useState(false);
   const [browsePath, setBrowsePath] = useState<string | null>(null);
@@ -415,12 +408,6 @@ export default function FilesScreen({
   const [browseRoots, setBrowseRoots] = useState<BrowseRoot[]>([]);
   const tabBarInset = useTabBarInset();
   const [browseLoading, setBrowseLoading] = useState(false);
-
-  const [moveTarget, setMoveTarget] = useState<FileEntry | null>(null);
-  const [moveDestPath, setMoveDestPath] = useState<string | null>(null);
-  const [moveDestEntries, setMoveDestEntries] = useState<BrowseEntry[]>([]);
-  const [moveDestRoots, setMoveDestRoots] = useState<BrowseRoot[]>([]);
-  const [moveDestLoading, setMoveDestLoading] = useState(false);
 
   const inPcFolder = isAbsolutePcPath(currentPath);
 
@@ -459,6 +446,12 @@ export default function FilesScreen({
       setEntries([]);
     }
   }, [isConnected, currentPath, loadDirectory]);
+
+  const { openEntryActions, OperationModals } = useFileEntryOperations({
+    onError,
+    onChanged: () => loadDirectory(currentPath, true),
+    onOpenInEditor,
+  });
 
   const openFile = async (entry: FileEntry) => {
     dismissKeyboard();
@@ -516,78 +509,9 @@ export default function FilesScreen({
     }
   };
 
-  const deleteEntry = async (entry: FileEntry) => {
-    try {
-      await titusClient.deletePath(entry.path);
-      await loadDirectory(currentPath, true);
-    } catch (err) {
-      onError(err instanceof Error ? err.message : "Failed to delete");
-    }
-  };
-
-  const confirmDelete = (entry: FileEntry) => {
-    Alert.alert(
-      "Delete",
-      `Delete ${entry.name}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => void deleteEntry(entry),
-        },
-      ]
-    );
-  };
-
-  const showEntryActions = (entry: FileEntry) => {
-    const actions: Array<{
-      text: string;
-      onPress?: () => void;
-      style?: "cancel" | "destructive" | "default";
-    }> = [];
-
-    if (entry.entryType === "file" && onOpenInEditor) {
-      actions.push({
-        text: "Open in Code",
-        onPress: () => onOpenInEditor(entry.path),
-      });
-    }
-
-    actions.push({
-      text: "Copy Path",
-      onPress: () => void copyPathToClipboard(entry.path),
-    });
-
-    actions.push(
-      {
-        text: "Rename",
-        onPress: () => {
-          setRenameTarget(entry);
-          setPromptKind("rename");
-          setPromptName(entry.name);
-          setPromptVisible(true);
-        },
-      },
-      {
-        text: "Move",
-        onPress: () => void startMove(entry),
-      },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () => confirmDelete(entry),
-      },
-      { text: "Cancel", style: "cancel" }
-    );
-
-    Alert.alert(entry.name, undefined, actions);
-  };
-
   const promptNewItem = (kind: "file" | "folder") => {
     setPromptKind(kind);
     setPromptName("");
-    setRenameTarget(null);
     setPromptVisible(true);
   };
 
@@ -596,19 +520,6 @@ export default function FilesScreen({
     if (!name) return;
 
     setPromptVisible(false);
-
-    if (promptKind === "rename" && renameTarget) {
-      const dest = joinPath(dirname(renameTarget.path), name);
-      try {
-        await titusClient.movePath(renameTarget.path, dest);
-        await loadDirectory(currentPath, true);
-      } catch (err) {
-        onError(err instanceof Error ? err.message : "Failed to rename");
-      } finally {
-        setRenameTarget(null);
-      }
-      return;
-    }
 
     const base = currentPath === "." ? "." : currentPath;
     const newPath = joinPath(base, name);
@@ -642,7 +553,7 @@ export default function FilesScreen({
       const first = roots.roots[0]?.path;
       if (first) {
         const listing = await titusClient.browseList(first);
-        setBrowsePath(listing.path);
+        setBrowsePath(normalizePath(listing.path));
         setBrowseEntries(listing.entries);
       }
     } catch (err) {
@@ -657,7 +568,7 @@ export default function FilesScreen({
     setBrowseLoading(true);
     try {
       const listing = await titusClient.browseList(path);
-      setBrowsePath(listing.path);
+      setBrowsePath(normalizePath(listing.path));
       setBrowseEntries(listing.entries);
     } catch (err) {
       onError(err instanceof Error ? err.message : "Failed to open folder");
@@ -667,92 +578,18 @@ export default function FilesScreen({
   };
 
   const browseParent = () => {
-    if (!browsePath) return;
-    if (isAbsolutePcPath(browsePath)) {
-      const parent = parentPath(browsePath.replace(/\\/g, "/"));
-      if (parent !== browsePath) {
-        void enterBrowseFolder(parent);
-      }
-      return;
-    }
-    const parts = browsePath.replace(/\\/g, "/").split("/").filter(Boolean);
-    if (parts.length <= 1) return;
-    parts.pop();
-    void enterBrowseFolder(`/${parts.join("/")}`);
+    if (!browsePath || isPathRoot(browsePath)) return;
+    void enterBrowseFolder(parentPath(browsePath));
   };
 
   const openBrowsedFolder = () => {
     if (!browsePath) return;
     setBrowseVisible(false);
-    setCurrentPath(browsePath.replace(/\\/g, "/"));
-  };
-
-  const startMove = async (entry: FileEntry) => {
-    setMoveTarget(entry);
-    setMoveDestLoading(true);
-
-    try {
-      const roots = await titusClient.getBrowseRoots();
-      setMoveDestRoots(roots.roots);
-      const first = roots.roots[0]?.path;
-      if (first) {
-        const listing = await titusClient.browseList(first);
-        setMoveDestPath(listing.path);
-        setMoveDestEntries(listing.entries);
-      }
-    } catch (err) {
-      onError(err instanceof Error ? err.message : "Failed to open move picker");
-      setMoveTarget(null);
-    } finally {
-      setMoveDestLoading(false);
-    }
-  };
-
-  const enterMoveDest = async (path: string) => {
-    setMoveDestLoading(true);
-    try {
-      const listing = await titusClient.browseList(path);
-      setMoveDestPath(listing.path);
-      setMoveDestEntries(listing.entries);
-    } catch (err) {
-      onError(err instanceof Error ? err.message : "Failed to open folder");
-    } finally {
-      setMoveDestLoading(false);
-    }
-  };
-
-  const moveDestParent = () => {
-    if (!moveDestPath) return;
-    const parent = parentPath(moveDestPath.replace(/\\/g, "/"));
-    if (parent !== moveDestPath) {
-      void enterMoveDest(parent);
-    }
-  };
-
-  const confirmMove = async () => {
-    if (!moveTarget || !moveDestPath) return;
-
-    const dest = joinPath(moveDestPath.replace(/\\/g, "/"), moveTarget.name);
-    try {
-      await titusClient.movePath(moveTarget.path, dest);
-      setMoveTarget(null);
-      setMoveDestPath(null);
-      await loadDirectory(currentPath, true);
-    } catch (err) {
-      onError(err instanceof Error ? err.message : "Failed to move");
-    }
-  };
-
-  const cancelMove = () => {
-    setMoveTarget(null);
-    setMoveDestPath(null);
+    setCurrentPath(normalizePath(browsePath));
   };
 
   const crumbs = breadcrumbSegments(currentPath);
-  const canGoUp =
-    inPcFolder
-      ? currentPath.replace(/\\/g, "/").replace(/\/+$/, "") !== driveRoot(currentPath)
-      : currentPath !== ".";
+  const canGoUp = !isPathRoot(currentPath);
 
   const locationTitle = inPcFolder
     ? "PC folder"
@@ -760,12 +597,7 @@ export default function FilesScreen({
       ? workspaceName
       : "Workspace";
 
-  const promptTitle =
-    promptKind === "rename"
-      ? "Rename"
-      : promptKind === "file"
-        ? "New File"
-        : "New Folder";
+  const promptTitle = promptKind === "file" ? "New File" : "New Folder";
 
   return (
     <View style={styles.container}>
@@ -897,7 +729,8 @@ export default function FilesScreen({
             <Pressable
               style={styles.row}
               onPress={() => openFile(item)}
-              onLongPress={() => showEntryActions(item)}
+              onLongPress={() => openEntryActions(item)}
+              delayLongPress={350}
             >
               <Text style={styles.rowIcon}>
                 {item.entryType === "directory" ? "📁" : "📄"}
@@ -994,10 +827,7 @@ export default function FilesScreen({
             <View style={styles.promptActions}>
               <Pressable
                 style={styles.promptBtn}
-                onPress={() => {
-                  setPromptVisible(false);
-                  setRenameTarget(null);
-                }}
+                onPress={() => setPromptVisible(false)}
               >
                 <Text style={styles.promptBtnText}>Cancel</Text>
               </Pressable>
@@ -1005,9 +835,7 @@ export default function FilesScreen({
                 style={[styles.promptBtn, styles.promptBtnPrimary]}
                 onPress={() => void submitPrompt()}
               >
-                <Text style={styles.promptBtnPrimaryText}>
-                  {promptKind === "rename" ? "Rename" : "Create"}
-                </Text>
+                <Text style={styles.promptBtnPrimaryText}>Create</Text>
               </Pressable>
             </View>
           </View>
@@ -1071,64 +899,7 @@ export default function FilesScreen({
         </View>
       </Modal>
 
-      <Modal visible={!!moveTarget} animationType="slide">
-        <View style={styles.browseModal}>
-          <View style={styles.browseHeader}>
-            <Text style={styles.browseTitle}>
-              Move {moveTarget?.name ?? ""}
-            </Text>
-            <Pressable onPress={cancelMove}>
-              <Text style={styles.browseClose}>Cancel</Text>
-            </Pressable>
-          </View>
-
-          <View style={styles.rootRow}>
-            {moveDestRoots.map((root) => (
-              <Pressable
-                key={root.path}
-                style={styles.rootChip}
-                onPress={() => void enterMoveDest(root.path)}
-              >
-                <Text style={styles.rootChipText}>{root.name}</Text>
-              </Pressable>
-            ))}
-          </View>
-
-          <Text style={styles.browsePath} numberOfLines={2}>
-            {moveDestPath ?? ""}
-          </Text>
-
-          {moveDestLoading ? (
-            <ActivityIndicator color={colors.iconAccent} style={styles.loader} />
-          ) : (
-            <FlatList
-              data={moveDestEntries}
-              keyExtractor={(item) => item.path}
-              renderItem={({ item }) => (
-                <Pressable
-                  style={styles.browseRow}
-                  onPress={() => void enterMoveDest(item.path)}
-                >
-                  <Text style={styles.browseRowIcon}>📁</Text>
-                  <Text style={styles.browseRowName}>{item.name}</Text>
-                </Pressable>
-              )}
-            />
-          )}
-
-          <View style={styles.browseFooter}>
-            <Pressable style={styles.browseFooterBtn} onPress={moveDestParent}>
-              <Text style={styles.browseFooterText}>Up</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.browseFooterBtn, styles.browseSelectBtn]}
-              onPress={() => void confirmMove()}
-            >
-              <Text style={styles.browseSelectText}>Move here</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      <OperationModals />
     </View>
   );
 }

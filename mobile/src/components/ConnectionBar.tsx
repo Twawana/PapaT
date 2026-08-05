@@ -361,7 +361,7 @@ export function ConnectionBar({
                     )}
                   </Pressable>
                   <Text style={styles.qrPrimaryHint}>
-                    Open PapaT on your PC, then scan the QR code shown there.
+                    Open Titus on your PC, then scan the QR code shown there.
                     Phone and PC must be on the same Wi-Fi.
                   </Text>
                 </View>
@@ -439,7 +439,7 @@ export function ConnectionBar({
                   style={[styles.input, styles.codeInput]}
                   value={manualCode}
                   onChangeText={(text) => setManualCode(text.toUpperCase())}
-                  placeholder="6-char code from PapaT desktop"
+                  placeholder="6-char code from Titus desktop"
                   placeholderTextColor={colors.placeholder}
                   autoCapitalize="characters"
                   autoCorrect={false}

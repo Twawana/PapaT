@@ -107,18 +107,18 @@ export async function printPairingQr(): Promise<void> {
     return;
   }
 
-  console.log("\n[PapaT Host] ── Pair your phone ──");
-  console.log(`[PapaT Host] Scan QR in the PapaT app, or enter manually:`);
-  console.log(`[PapaT Host]   Host: ${info.lanIp}`);
+  console.log("\n[Titus Host] ── Pair your phone ──");
+  console.log(`[Titus Host] Scan QR in the Titus app, or enter manually:`);
+  console.log(`[Titus Host]   Host: ${info.lanIp}`);
   if (info.lanIps.length > 1) {
-    console.log(`[PapaT Host]   Other IPs: ${info.lanIps.slice(1).join(", ")}`);
+    console.log(`[Titus Host]   Other IPs: ${info.lanIps.slice(1).join(", ")}`);
   }
   if (info.lanWarning) {
-    console.warn(`[PapaT Host]   Warning: ${info.lanWarning}`);
+    console.warn(`[Titus Host]   Warning: ${info.lanWarning}`);
   }
-  console.log(`[PapaT Host]   Port: ${info.port}`);
+  console.log(`[Titus Host]   Port: ${info.port}`);
   console.log(
-    `[PapaT Host]   Code: ${info.code} (expires in ${Math.round(info.expiresInMs / 1000)}s)`
+    `[Titus Host]   Code: ${info.code} (expires in ${Math.round(info.expiresInMs / 1000)}s)`
   );
 
   try {
@@ -128,10 +128,10 @@ export async function printPairingQr(): Promise<void> {
     });
     console.log(qr);
   } catch {
-    console.log(`[PapaT Host] QR payload: ${JSON.stringify(info.payload)}`);
+    console.log(`[Titus Host] QR payload: ${JSON.stringify(info.payload)}`);
   }
 
-  console.log("[PapaT Host] ───────────────────────\n");
+  console.log("[Titus Host] ───────────────────────\n");
 }
 
 /**

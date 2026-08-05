@@ -11,6 +11,19 @@ import { getWorkspaceRoot } from "./workspace-state";
 import { config } from "./config";
 
 const MAX_FILE_BYTES = config.maxFileBytes;
+/** Images can be larger than text edit limits; still capped for phone memory. */
+const MAX_IMAGE_BYTES = 8_000_000;
+
+function imageMetaFromPath(filePath: string): { mimeType: string } | null {
+  const lower = filePath.toLowerCase();
+  if (lower.endsWith(".png")) return { mimeType: "image/png" };
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return { mimeType: "image/jpeg" };
+  if (lower.endsWith(".gif")) return { mimeType: "image/gif" };
+  if (lower.endsWith(".webp")) return { mimeType: "image/webp" };
+  if (lower.endsWith(".bmp")) return { mimeType: "image/bmp" };
+  if (lower.endsWith(".svg")) return { mimeType: "image/svg+xml" };
+  return null;
+}
 
 export async function listDirectory(clientPath: string): Promise<FileEntry[]> {
   const absolutePath = resolveFsPath(clientPath);
@@ -57,6 +70,8 @@ export async function readFile(clientPath: string): Promise<{
   content: string;
   size: number;
   mtime: number;
+  encoding: "utf-8" | "base64";
+  mimeType?: string;
 }> {
   const absolutePath = resolveFsPath(clientPath);
   await assertPathAllowed(absolutePath);
@@ -65,8 +80,35 @@ export async function readFile(clientPath: string): Promise<{
   if (!stat.isFile()) {
     throw new Error("Not a file");
   }
-  if (stat.size > MAX_FILE_BYTES) {
-    throw new Error(`File exceeds ${MAX_FILE_BYTES} byte limit`);
+
+  const image = imageMetaFromPath(absolutePath);
+  const limit = image ? Math.max(MAX_FILE_BYTES, MAX_IMAGE_BYTES) : MAX_FILE_BYTES;
+  if (stat.size > limit) {
+    throw new Error(`File exceeds ${limit} byte limit`);
+  }
+
+  if (image) {
+    if (image.mimeType === "image/svg+xml") {
+      const content = await fs.promises.readFile(absolutePath, "utf-8");
+      return {
+        path: toClientPath(absolutePath),
+        content,
+        size: stat.size,
+        mtime: stat.mtimeMs,
+        encoding: "utf-8",
+        mimeType: image.mimeType,
+      };
+    }
+
+    const buffer = await fs.promises.readFile(absolutePath);
+    return {
+      path: toClientPath(absolutePath),
+      content: buffer.toString("base64"),
+      size: stat.size,
+      mtime: stat.mtimeMs,
+      encoding: "base64",
+      mimeType: image.mimeType,
+    };
   }
 
   const content = await fs.promises.readFile(absolutePath, "utf-8");
@@ -76,6 +118,7 @@ export async function readFile(clientPath: string): Promise<{
     content,
     size: stat.size,
     mtime: stat.mtimeMs,
+    encoding: "utf-8",
   };
 }
 

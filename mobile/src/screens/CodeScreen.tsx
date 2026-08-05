@@ -1,13 +1,17 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Modal,
   Pressable,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import { CodeEditor, CodeEditorHandle } from "../components/CodeEditor";
 import { EditorTabs } from "../components/EditorTabs";
 import { FileTreePanel } from "../components/FileTreePanel";
@@ -19,10 +23,11 @@ import { TerminalOutput } from "../components/TerminalOutput";
 import { WorkspaceSearchPanel } from "../components/WorkspaceSearchPanel";
 import { editorModeFromPath, useEditor } from "../context/EditorContext";
 import { useTheme } from "../context/ThemeContext";
+import { useCodeOrientation } from "../hooks/useCodeOrientation";
 import { useTabBarInset } from "../hooks/useTabBarInset";
 import { useThemedStyles } from "../hooks/useThemedStyles";
-import { titusClient } from "../services/websocket";
 import { snippetsForLanguage } from "../services/snippets";
+import { titusClient } from "../services/websocket";
 import {
   DiagnosticItem,
   ExecuteLanguage,
@@ -30,13 +35,22 @@ import {
   PackageScript,
   ServerMessage,
 } from "../types/protocol";
-import { isImagePath, isMarkdownPath } from "../utils/language";
+import { ImagePreview } from "../components/ImagePreview";
+import {
+  imageDataUri,
+  imageMimeFromPath,
+  imagePreviewHttpUrl,
+  isImagePath,
+  isMarkdownPath,
+} from "../utils/language";
+import { keyboardAvoidBehavior, useCompactKeyboardLayout } from "../utils/keyboard";
 
 interface Props {
   isConnected: boolean;
   workspacePath: string | null;
   workspaceName: string;
   onError: (message: string | null) => void;
+  isActive?: boolean;
 }
 
 type BottomPanel = "output" | "problems" | "search";
@@ -52,15 +66,40 @@ export default function CodeScreen({
   workspacePath,
   workspaceName,
   onError,
+  isActive = false,
 }: Props) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const compactKeyboard = useCompactKeyboardLayout();
   const styles = useThemedStyles((c) => ({
     flex: { flex: 1 },
+    workspaceBannerRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 8,
+      marginBottom: 8,
+    },
     workspaceBanner: {
+      flex: 1,
       color: c.link,
       fontSize: 12,
       fontWeight: "600",
-      marginBottom: 6,
+    },
+    workspaceFullscreenBtn: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 8,
+      backgroundColor: c.buttonPrimary,
+      borderWidth: 1,
+      borderColor: c.accentBorder,
+    },
+    workspaceFullscreenBtnText: {
+      color: c.onPrimary,
+      fontSize: 12,
+      fontWeight: "700" as const,
     },
     toolbar: {
       maxHeight: 44,
@@ -74,11 +113,88 @@ export default function CodeScreen({
       marginRight: 6,
       borderWidth: 1,
       borderColor: c.border,
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 4,
+    },
+    toolBtnActive: {
+      backgroundColor: c.buttonPrimary,
+      borderColor: c.accentBorder,
     },
     toolText: {
       color: c.textSecondary,
       fontSize: 12,
       fontWeight: "600",
+    },
+    toolTextActive: {
+      color: c.onPrimary,
+    },
+    fullscreenRoot: {
+      flex: 1,
+      backgroundColor: c.background,
+    },
+    fullscreenToolbar: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 8,
+      paddingHorizontal: 12,
+      paddingBottom: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: c.border,
+      backgroundColor: c.surface,
+    },
+    fullscreenTitle: {
+      flex: 1,
+      color: c.textPrimary,
+      fontSize: 13,
+      fontWeight: "600" as const,
+    },
+    fullscreenBody: {
+      flex: 1,
+      flexDirection: "row" as const,
+      minHeight: 0,
+    },
+    fullscreenEditor: {
+      flex: 1,
+      paddingHorizontal: 8,
+      paddingBottom: 8,
+      minWidth: 0,
+    },
+    fullscreenHint: {
+      color: c.textMuted,
+      fontSize: 11,
+      paddingHorizontal: 12,
+      paddingTop: 6,
+      paddingBottom: 4,
+    },
+    fullscreenTreeToggle: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 8,
+      backgroundColor: c.buttonSecondary,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    noWorkspaceFullscreenBtn: {
+      alignSelf: "flex-start" as const,
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      marginBottom: 8,
+      borderRadius: 8,
+      backgroundColor: c.buttonPrimary,
+      borderWidth: 1,
+      borderColor: c.accentBorder,
+    },
+    noWorkspaceFullscreenBtnText: {
+      color: c.onPrimary,
+      fontSize: 12,
+      fontWeight: "700" as const,
     },
     runBtn: {
       backgroundColor: c.buttonPrimary,
@@ -248,8 +364,10 @@ export default function CodeScreen({
   }));
   const editor = useEditor();
   const editorRef = useRef<CodeEditorHandle>(null);
+  const fullscreenEditorRef = useRef<CodeEditorHandle>(null);
   const tabBarInset = useTabBarInset();
 
+  const [fullscreen, setFullscreen] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const [findVisible, setFindVisible] = useState(false);
   const [findQuery, setFindQuery] = useState("");
@@ -267,6 +385,14 @@ export default function CodeScreen({
 
   const activeExecutionId = useRef<string | null>(null);
   const activeFile = editor.getActiveFile();
+
+  useCodeOrientation(isActive || fullscreen);
+
+  useEffect(() => {
+    if (!isActive && fullscreen) {
+      setFullscreen(false);
+    }
+  }, [isActive, fullscreen]);
 
   const handleServerMessage = useCallback(
     (message: ServerMessage) => {
@@ -419,15 +545,28 @@ export default function CodeScreen({
     }
 
     if (isImagePath(activeFile.path)) {
+      const encoding = activeFile.encoding ?? "base64";
+      const dataUri =
+        activeFile.content.length > 0
+          ? imageDataUri(activeFile.path, activeFile.content, encoding)
+          : null;
+      const { host, port } = titusClient.getConnectTarget();
+      const httpUri = imagePreviewHttpUrl(
+        host,
+        port,
+        activeFile.path,
+        titusClient.getAuthToken()
+      );
+      const isSvg =
+        (activeFile.mimeType ?? imageMimeFromPath(activeFile.path)) ===
+        "image/svg+xml";
       return (
-        <View style={styles.placeholder}>
-          <Text style={styles.placeholderText}>
-            Image file: {activeFile.path.split("/").pop()}
-          </Text>
-          <Text style={styles.placeholderHint}>
-            Open in Files tab or on your PC to view binary images.
-          </Text>
-        </View>
+        <ImagePreview
+          httpUri={httpUri}
+          dataUri={dataUri}
+          label={activeFile.path.split("/").pop()}
+          useWebView={isSvg}
+        />
       );
     }
 
@@ -452,11 +591,31 @@ export default function CodeScreen({
 
   return (
     <View style={styles.flex}>
-      {hasWorkspace ? (
-        <Text style={styles.workspaceBanner} numberOfLines={1}>
-          Project: {workspaceName}
-        </Text>
+      {!compactKeyboard && hasWorkspace ? (
+        <View style={styles.workspaceBannerRow}>
+          <Text style={styles.workspaceBanner} numberOfLines={1}>
+            Project: {workspaceName}
+          </Text>
+          <Pressable
+            style={styles.workspaceFullscreenBtn}
+            onPress={() => setFullscreen(true)}
+            accessibilityLabel="Open workspace fullscreen"
+          >
+            <Ionicons name="expand-outline" size={14} color={colors.onPrimary} />
+            <Text style={styles.workspaceFullscreenBtnText}>Fullscreen</Text>
+          </Pressable>
+        </View>
+      ) : !compactKeyboard ? (
+        <Pressable
+          style={styles.noWorkspaceFullscreenBtn}
+          onPress={() => setFullscreen(true)}
+          accessibilityLabel="Open workspace fullscreen"
+        >
+          <Ionicons name="expand-outline" size={14} color={colors.onPrimary} />
+          <Text style={styles.noWorkspaceFullscreenBtnText}>Fullscreen</Text>
+        </Pressable>
       ) : null}
+      {!compactKeyboard ? (
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.toolbar}>
         <Pressable style={styles.toolBtn} onPress={() => setQuickOpen(true)}>
           <Text style={styles.toolText}>Open</Text>
@@ -495,13 +654,15 @@ export default function CodeScreen({
           <Text style={styles.runText}>{execution.isRunning ? "Running…" : "Run"}</Text>
         </Pressable>
       </ScrollView>
+      ) : null}
 
-      {editor.pendingWrites > 0 ? (
+      {!compactKeyboard && editor.pendingWrites > 0 ? (
         <Text style={styles.queueHint}>
           {editor.pendingWrites} save(s) queued — reconnect to sync
         </Text>
       ) : null}
 
+      {!compactKeyboard ? (
       <EditorTabs
         tabs={editor.tabs.map((tab) => ({
           path: tab.path,
@@ -511,16 +672,17 @@ export default function CodeScreen({
         onSelect={editor.setActivePath}
         onClose={editor.closeTab}
       />
+      ) : null}
 
       <FindBar
-        visible={findVisible}
+        visible={findVisible && !compactKeyboard}
         query={findQuery}
         onChangeQuery={setFindQuery}
         onFindNext={() => editorRef.current?.find(findQuery)}
         onClose={() => setFindVisible(false)}
       />
 
-      {activeFile ? (
+      {activeFile && !compactKeyboard ? (
         <ScrollView horizontal style={styles.langRow} showsHorizontalScrollIndicator={false}>
           {RUN_LANGUAGES.map((lang) => (
             <Pressable
@@ -543,14 +705,15 @@ export default function CodeScreen({
 
       <View style={styles.editorRow}>
         <FileTreePanel
-          visible={editor.treeVisible}
+          visible={!compactKeyboard && editor.treeVisible}
           workspaceKey={workspacePath}
           onOpenFile={(path) => void handleOpenPath(path)}
+          onError={onError}
         />
         <View style={styles.editorMain}>{renderEditorArea()}</View>
       </View>
 
-      {scripts.length > 0 ? (
+      {!compactKeyboard && scripts.length > 0 ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scriptRow}>
           {scripts.slice(0, 8).map((script) => (
             <Pressable
@@ -564,6 +727,7 @@ export default function CodeScreen({
         </ScrollView>
       ) : null}
 
+      {!compactKeyboard ? (
       <View style={styles.bottomTabs}>
         {(["output", "problems", "search"] as BottomPanel[]).map((panel) => (
           <Pressable
@@ -586,7 +750,9 @@ export default function CodeScreen({
           </Pressable>
         ))}
       </View>
+      ) : null}
 
+      {!compactKeyboard ? (
       <View style={[styles.bottomPanel, { marginBottom: tabBarInset }]}>
         {bottomPanel === "output" ? (
           <TerminalOutput
@@ -608,6 +774,7 @@ export default function CodeScreen({
           />
         ) : null}
       </View>
+      ) : null}
 
       <QuickOpenModal
         visible={quickOpen}
@@ -615,6 +782,123 @@ export default function CodeScreen({
         onClose={() => setQuickOpen(false)}
         onOpen={(path) => void handleOpenPath(path)}
       />
+
+      <Modal
+        visible={fullscreen}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setFullscreen(false)}
+        supportedOrientations={["portrait", "landscape-left", "landscape-right"]}
+      >
+        <StatusBar hidden={fullscreen} />
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={keyboardAvoidBehavior()}
+          keyboardVerticalOffset={0}
+        >
+        <View
+          style={[
+            styles.fullscreenRoot,
+            {
+              paddingTop: compactKeyboard ? 0 : insets.top,
+              paddingBottom: compactKeyboard ? 0 : insets.bottom,
+              paddingLeft: insets.left,
+              paddingRight: insets.right,
+            },
+          ]}
+        >
+          {!compactKeyboard ? (
+          <View style={styles.fullscreenToolbar}>
+            <Pressable
+              style={styles.toolBtn}
+              onPress={() => setFullscreen(false)}
+              accessibilityLabel="Exit fullscreen"
+            >
+              <Ionicons name="contract-outline" size={14} color={colors.icon} />
+              <Text style={styles.toolText}>Exit</Text>
+            </Pressable>
+            <Pressable
+              style={styles.fullscreenTreeToggle}
+              onPress={() => editor.setTreeVisible(!editor.treeVisible)}
+            >
+              <Ionicons name="folder-outline" size={14} color={colors.icon} />
+              <Text style={styles.toolText}>
+                {editor.treeVisible ? "Hide files" : "Files"}
+              </Text>
+            </Pressable>
+            <Text style={styles.fullscreenTitle} numberOfLines={1}>
+              {activeFile?.path?.split(/[/\\]/).pop() ?? workspaceName ?? "Workspace"}
+              {activeFile && activeFile.content !== activeFile.savedContent ? " •" : ""}
+            </Text>
+            <Pressable style={styles.toolBtn} onPress={() => void handleSave()}>
+              <Text style={styles.toolText}>Save</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.runBtn, (!isConnected || execution.isRunning) && styles.disabled]}
+              onPress={handleRun}
+              disabled={!isConnected || execution.isRunning}
+            >
+              <Text style={styles.runText}>{execution.isRunning ? "…" : "Run"}</Text>
+            </Pressable>
+          </View>
+          ) : null}
+          {!compactKeyboard ? (
+          <Text style={styles.fullscreenHint}>
+            Fullscreen workspace · rotate for landscape · Exit to leave
+          </Text>
+          ) : null}
+          {!compactKeyboard ? (
+          <EditorTabs
+            tabs={editor.tabs.map((tab) => ({
+              path: tab.path,
+              dirty: tab.content !== tab.savedContent,
+            }))}
+            activePath={editor.activePath}
+            onSelect={editor.setActivePath}
+            onClose={editor.closeTab}
+          />
+          ) : null}
+          <View style={styles.fullscreenBody}>
+            <FileTreePanel
+              visible={!compactKeyboard && editor.treeVisible}
+              workspaceKey={workspacePath}
+              onOpenFile={(path) => void handleOpenPath(path)}
+              onError={onError}
+            />
+            <View style={styles.fullscreenEditor}>
+              {activeFile && !activeFile.loading && !isImagePath(activeFile.path) ? (
+                isMarkdownPath(activeFile.path) && activeFile.previewMode === "markdown" ? (
+                  <MarkdownPreview markdown={activeFile.content} />
+                ) : (
+                  <CodeEditor
+                    ref={fullscreenEditorRef}
+                    editorKey={`fs-${activeFile.path}`}
+                    value={activeFile.content}
+                    mode={editorModeFromPath(activeFile.path)}
+                    onChange={(value) => editor.updateContent(activeFile.path, value)}
+                  />
+                )
+              ) : (
+                <View style={styles.placeholder}>
+                  <Text style={styles.placeholderText}>
+                    Open a file from the tree or Quick Open to start coding.
+                  </Text>
+                  <Pressable
+                    style={styles.primaryBtn}
+                    onPress={() => {
+                      setFullscreen(false);
+                      setQuickOpen(true);
+                    }}
+                  >
+                    <Text style={styles.primaryBtnText}>Quick Open</Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+          </View>
+        </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       <Modal visible={snippetsVisible} transparent animationType="fade">
         <Pressable style={styles.modalBackdrop} onPress={() => setSnippetsVisible(false)}>

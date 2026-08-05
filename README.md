@@ -34,6 +34,7 @@ Find your PC's local IP (e.g. `192.168.1.42`):
 cd mobile
 npm install
 npx expo start
+npm start
 ```
 
 - Scan the QR code with **Expo Go** on your phone (same Wi-Fi as PC)

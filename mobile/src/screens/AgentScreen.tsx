@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -13,6 +14,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { CookingBanner } from "../components/CookingBanner";
+import { AgentChatHistoryModal } from "../components/AgentChatHistoryModal";
 import { AgentProviderModal } from "../components/AgentProviderModal";
 import { AgentTryAgainModal } from "../components/AgentTryAgainModal";
 import { AgentWorkspaceModal } from "../components/AgentWorkspaceModal";
@@ -21,7 +23,7 @@ import { useAgentChat } from "../hooks/useAgentChat";
 import { useTabBarInset } from "../hooks/useTabBarInset";
 import { ThemeColors } from "../theme/colors";
 import { AgentUiMessage } from "../types/protocol";
-import { dismissKeyboard, keyboardAvoidBehavior, keyboardPersistTaps } from "../utils/keyboard";
+import { dismissKeyboard, keyboardAvoidBehavior, keyboardPersistTaps, useCompactKeyboardLayout } from "../utils/keyboard";
 import { titusClient } from "../services/websocket";
 
 interface Props {
@@ -202,6 +204,7 @@ export default function AgentScreen({
   const listRef = useRef<FlatList>(null);
   const chat = useAgentChat(isConnected, onError);
   const tabBarInset = useTabBarInset();
+  const compactKeyboard = useCompactKeyboardLayout();
   const { colors, isDark } = useTheme();
   const styles = useMemo(
     () => StyleSheet.create(createAgentStyles(colors, isDark)),
@@ -209,6 +212,7 @@ export default function AgentScreen({
   );
   const [providerModalVisible, setProviderModalVisible] = useState(false);
   const [workspaceModalVisible, setWorkspaceModalVisible] = useState(false);
+  const [historyModalVisible, setHistoryModalVisible] = useState(false);
   const [activeAgentLabel, setActiveAgentLabel] = useState("Cursor");
 
   useEffect(() => {
@@ -266,12 +270,31 @@ export default function AgentScreen({
     setWorkspaceModalVisible(true);
   };
 
+  const confirmDeleteSession = (sessionId: string) => {
+    const session = chat.sessions.find((item) => item.sessionId === sessionId);
+    Alert.alert(
+      "Delete chat",
+      `Delete “${session?.title || "this chat"}”? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => void chat.deleteSession(sessionId),
+        },
+      ]
+    );
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={keyboardAvoidBehavior()}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 88 : 0}
+      keyboardVerticalOffset={
+        compactKeyboard ? 0 : Platform.OS === "ios" ? 64 : 0
+      }
     >
+      {!compactKeyboard ? (
       <View style={styles.toolbar}>
         <Pressable
           style={styles.titleBlock}
@@ -331,19 +354,21 @@ export default function AgentScreen({
             <Text style={styles.actionBtnText}>New</Text>
           </Pressable>
           <Pressable
-            style={[styles.clearBtn, (!isConnected || chat.isRunning) && styles.btnDisabled]}
+            style={styles.providerBtn}
             onPress={() => {
-            dismissKeyboard();
-            chat.clearChat();
-          }}
-            disabled={!isConnected || chat.isRunning}
+              dismissKeyboard();
+              setHistoryModalVisible(true);
+            }}
+            accessibilityLabel="Chat history"
           >
-            <Text style={styles.clearBtnText}>Clear</Text>
+            <Ionicons name="time-outline" size={14} color={colors.icon} />
+            <Text style={styles.providerBtnText}>Chats</Text>
           </Pressable>
         </View>
       </View>
+      ) : null}
 
-      {chat.runningOnPc ? (
+      {chat.runningOnPc && !compactKeyboard ? (
         <View style={styles.pcRunningBanner}>
           <Text style={styles.pcRunningText}>
             {isConnected
@@ -353,32 +378,26 @@ export default function AgentScreen({
         </View>
       ) : null}
 
-      {chat.sessions.length > 0 ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.sessionScroll}
-          contentContainerStyle={styles.sessionList}
+      {chat.sessions.length > 0 && !compactKeyboard ? (
+        <Pressable
+          style={styles.sessionBanner}
+          onPress={() => {
+            dismissKeyboard();
+            setHistoryModalVisible(true);
+          }}
         >
-          {chat.sessions.map((session) => {
-            const active = session.sessionId === chat.activeSessionId;
-            return (
-              <Pressable
-                key={session.sessionId}
-                style={[styles.sessionChip, active && styles.sessionChipActive]}
-                onPress={() => chat.selectSession(session.sessionId)}
-                disabled={chat.isRunning}
-              >
-                <Text
-                  style={[styles.sessionChipText, active && styles.sessionChipTextActive]}
-                  numberOfLines={1}
-                >
-                  {session.title}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+          <View style={styles.sessionBannerText}>
+            <Text style={styles.sessionBannerTitle} numberOfLines={1}>
+              {chat.sessions.find((s) => s.sessionId === chat.activeSessionId)?.title ||
+                "Current chat"}
+            </Text>
+            <Text style={styles.sessionBannerMeta}>
+              {chat.sessions.length} saved chat{chat.sessions.length === 1 ? "" : "s"} · Tap to
+              browse
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.icon} />
+        </Pressable>
       ) : null}
 
       {!isConnected ? (
@@ -493,6 +512,17 @@ export default function AgentScreen({
         )}
       </View>
 
+      <AgentChatHistoryModal
+        visible={historyModalVisible}
+        sessions={chat.sessions}
+        activeSessionId={chat.activeSessionId}
+        isRunning={chat.isRunning}
+        onClose={() => setHistoryModalVisible(false)}
+        onSelect={(sessionId) => void chat.selectSession(sessionId)}
+        onDelete={confirmDeleteSession}
+        onNewChat={() => void chat.newChat()}
+      />
+
       <AgentProviderModal
         visible={providerModalVisible}
         onClose={() => setProviderModalVisible(false)}
@@ -593,6 +623,9 @@ function createAgentStyles(colors: ThemeColors, isDark: boolean) {
       marginTop: 2,
     },
     actionBtn: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 4,
       paddingHorizontal: 10,
       paddingVertical: 6,
       borderRadius: 8,
@@ -605,47 +638,30 @@ function createAgentStyles(colors: ThemeColors, isDark: boolean) {
       fontSize: 12,
       fontWeight: "600" as const,
     },
-    clearBtn: {
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      borderRadius: 8,
-      backgroundColor: colors.buttonSecondary,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    clearBtnText: {
-      color: colors.icon,
-      fontSize: 12,
-      fontWeight: "600" as const,
-    },
-    sessionScroll: {
-      maxHeight: 44,
-      marginBottom: 8,
-    },
-    sessionList: {
+    sessionBanner: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
       gap: 8,
-      paddingRight: 8,
-    },
-    sessionChip: {
-      maxWidth: 180,
       paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: 999,
-      backgroundColor: colors.surfaceElevated,
+      paddingVertical: 10,
+      marginBottom: 8,
+      borderRadius: 10,
       borderWidth: 1,
       borderColor: colors.border,
+      backgroundColor: colors.surfaceElevated,
     },
-    sessionChipActive: {
-      backgroundColor: colors.buttonPrimary,
-      borderColor: colors.accentBorder,
+    sessionBannerText: {
+      flex: 1,
+      gap: 2,
     },
-    sessionChipText: {
-      color: colors.textMuted,
-      fontSize: 12,
+    sessionBannerTitle: {
+      color: colors.textPrimary,
+      fontSize: 13,
       fontWeight: "600" as const,
     },
-    sessionChipTextActive: {
-      color: colors.onPrimary,
+    sessionBannerMeta: {
+      color: colors.textMuted,
+      fontSize: 11,
     },
     hint: {
       color: colors.textMuted,

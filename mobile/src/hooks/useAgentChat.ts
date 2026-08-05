@@ -110,7 +110,7 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
     message: string;
   } | null>(null);
   const assistantIdRef = useRef<string | null>(null);
-  const sessionsLoadedRef = useRef(false);
+  const [sessionsReady, setSessionsReady] = useState(false);
   const wasRunningOnDisconnectRef = useRef(false);
 
   const persistSessions = useCallback(async (nextSessions: AgentSessionSummary[]) => {
@@ -173,11 +173,11 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
         sessionIdRef.current = initialId;
         setActiveSessionId(initialId);
         setSessions(savedSessions);
-        sessionsLoadedRef.current = true;
+        setSessionsReady(true);
       } catch (err) {
         console.error("[Titus] Failed to load chat sessions", err);
         if (!cancelled) {
-          sessionsLoadedRef.current = true;
+          setSessionsReady(true);
         }
       }
     })();
@@ -238,7 +238,7 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
       return;
     }
 
-    if (!sessionsLoadedRef.current) {
+    if (!sessionsReady) {
       return;
     }
 
@@ -246,7 +246,7 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
       await refreshSessions();
       await syncAfterReconnect();
     })();
-  }, [isConnected, isRunning, refreshSessions, syncAfterReconnect]);
+  }, [isConnected, sessionsReady, refreshSessions, syncAfterReconnect]);
 
   useEffect(() => {
     const onAppStateChange = (nextState: AppStateStatus) => {
@@ -598,28 +598,46 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
     setRunningOnPc(false);
   }, [onError]);
 
+  const deleteSession = useCallback(
+    async (sessionId: string) => {
+      if (isRunning && sessionId === sessionIdRef.current) {
+        return;
+      }
+
+      if (isConnected) {
+        try {
+          await titusClient.clearAgentHistory(sessionId);
+        } catch {
+          // Local delete still applies
+        }
+      }
+
+      const nextSessions = removeSession(sessions, sessionId);
+      await persistSessions(nextSessions);
+
+      if (sessionId !== sessionIdRef.current) {
+        return;
+      }
+
+      const nextId = nextSessions[0]?.sessionId ?? createSessionId();
+      sessionIdRef.current = nextId;
+      setActiveSessionId(nextId);
+      setMessages([]);
+      setInput("");
+      setAttachments([]);
+      assistantIdRef.current = null;
+      await saveActiveSessionId(nextId);
+
+      if (isConnected && nextSessions[0]?.sessionId === nextId) {
+        await loadHistory(nextId);
+      }
+    },
+    [isConnected, isRunning, loadHistory, persistSessions, sessions]
+  );
+
   const clearChat = useCallback(async () => {
-    if (!isConnected || isRunning) return;
-
-    const sessionId = sessionIdRef.current;
-
-    try {
-      await titusClient.clearAgentHistory(sessionId);
-    } catch {
-      // Local reset still applies
-    }
-
-    const nextSessions = removeSession(sessions, sessionId);
-    await persistSessions(nextSessions);
-
-    const nextId = createSessionId();
-    sessionIdRef.current = nextId;
-    setActiveSessionId(nextId);
-    setMessages([]);
-    setInput("");
-    setAttachments([]);
-    await saveActiveSessionId(nextId);
-  }, [isConnected, isRunning, persistSessions, sessions]);
+    await deleteSession(sessionIdRef.current);
+  }, [deleteSession]);
 
   return {
     sessions,
@@ -638,7 +656,9 @@ export function useAgentChat(isConnected: boolean, onError?: (message: string | 
     dismissTryAgain,
     cancel,
     clearChat,
+    deleteSession,
     newChat,
     selectSession,
+    refreshSessions,
   };
 }

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PapaT</title>
+    <title>Titus</title>
     <style>
       :root {
         color-scheme: dark;
@@ -108,19 +108,21 @@
         border: 1px dashed rgba(110, 168, 254, 0.35);
         background: rgba(110, 168, 254, 0.06);
         display: grid;
-        grid-template-columns: 200px 1fr;
-        gap: 20px;
+        grid-template-columns: 260px 1fr;
+        gap: 24px;
         align-items: center;
       }
 
       .qr-wrap {
-        width: 200px;
-        height: 200px;
-        border-radius: 12px;
+        width: 260px;
+        height: 260px;
+        border-radius: 16px;
         background: #fff;
         display: grid;
         place-items: center;
         overflow: hidden;
+        border: 3px solid rgba(110, 168, 254, 0.45);
+        box-shadow: 0 0 0 6px rgba(110, 168, 254, 0.12);
       }
 
       .qr-wrap img {
@@ -128,13 +130,15 @@
         height: 100%;
         object-fit: contain;
         display: block;
+        padding: 10px;
       }
 
       .qr-placeholder {
         color: #666;
-        font-size: 13px;
+        font-size: 14px;
         text-align: center;
-        padding: 12px;
+        padding: 16px;
+        line-height: 1.4;
       }
 
       .pair-title {
@@ -204,6 +208,71 @@
         margin-top: 8px;
       }
 
+      .devices-box {
+        margin-top: 20px;
+        padding: 16px 18px;
+        border-radius: 14px;
+        border: 1px solid rgba(61, 220, 132, 0.2);
+        background: rgba(61, 220, 132, 0.05);
+      }
+
+      .devices-box.empty {
+        border-color: rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.03);
+      }
+
+      .devices-title {
+        margin: 0 0 10px;
+        font-weight: 700;
+        font-size: 1rem;
+      }
+
+      .devices-empty {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .device-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 8px;
+      }
+
+      .device-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.05);
+      }
+
+      .device-name {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+      }
+
+      .device-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--ok);
+        box-shadow: 0 0 0 4px rgba(61, 220, 132, 0.15);
+      }
+
+      .device-meta {
+        color: var(--muted);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
       @media (max-width: 640px) {
         .pair-box {
           grid-template-columns: 1fr;
@@ -219,9 +288,9 @@
   </head>
   <body>
     <main class="card">
-      <h1>PapaT</h1>
+      <h1>Titus</h1>
       <p class="subtitle">
-        Your PC host is running. Keep this window open and connect from the PapaT
+        Your PC host is running. Keep this window open and connect from the Titus
         app on your phone (same Wi-Fi).
       </p>
 
@@ -246,16 +315,28 @@
           <span class="label">Port</span>
           <span class="value" id="port">3847</span>
         </div>
+        <div class="row">
+          <span class="label">Phone connected</span>
+          <span class="pill warn" id="device-status">Waiting…</span>
+        </div>
+      </section>
+
+      <section class="devices-box empty" id="devices-box" aria-live="polite">
+        <p class="devices-title">Connected devices</p>
+        <p class="devices-empty" id="devices-empty">
+          No phone connected yet. Scan the QR code below to pair.
+        </p>
+        <ul class="device-list" id="devices-list" hidden></ul>
       </section>
 
       <section class="pair-box">
         <div class="qr-wrap" id="qr-wrap">
-          <div class="qr-placeholder" id="qr-placeholder">Waiting for host…</div>
-          <img id="qr-image" alt="Pairing QR code" hidden />
+          <div class="qr-placeholder" id="qr-placeholder">Loading QR code…</div>
+          <img id="qr-image" alt="Pairing QR code — scan with the Titus phone app" hidden />
         </div>
         <div>
-          <p class="pair-title">Scan to pair your phone</p>
-          <p class="subtitle">Or enter the code manually in the PapaT mobile app.</p>
+          <p class="pair-title">Scan this QR with your phone</p>
+          <p class="subtitle">Open Titus on your phone → Scan QR Code. Or enter the code manually.</p>
           <div class="pair-code" id="pair-code">······</div>
           <div class="expires" id="expires">Expires in —</div>
           <div class="actions">
@@ -269,7 +350,7 @@
       </section>
 
       <ol class="steps">
-        <li>Open the PapaT app on your phone.</li>
+        <li>Open the Titus app on your phone.</li>
         <li>Make sure phone and PC are on the <strong>same Wi-Fi</strong> (not a guest or client-isolated network).</li>
         <li>Tap <strong>Scan QR Code</strong> in the app and point it at this screen.</li>
         <li>If connection fails, allow inbound TCP port <strong>3847</strong> in Windows Firewall when prompted.</li>
@@ -280,9 +361,17 @@
     <script>
       const DEFAULT_BACKEND_PORT = 3847;
       const STATUS_URL = "/api/status";
-      const DEFAULT_PAIRING_API = `http://127.0.0.1:${DEFAULT_BACKEND_PORT}/api/pairing`;
+      const CLIENTS_URL = "/api/clients";
+      const FALLBACK_CLIENTS_URL = `http://127.0.0.1:${DEFAULT_BACKEND_PORT}/api/clients`;
+      // Same-origin proxy on the Electron UI server (falls back to host directly).
+      const DEFAULT_PAIRING_API = "/api/pairing";
+      const FALLBACK_PAIRING_API = `http://127.0.0.1:${DEFAULT_BACKEND_PORT}/api/pairing`;
 
       const backendStatus = document.getElementById("backend-status");
+      const deviceStatus = document.getElementById("device-status");
+      const devicesBox = document.getElementById("devices-box");
+      const devicesEmpty = document.getElementById("devices-empty");
+      const devicesList = document.getElementById("devices-list");
       const lanIpEl = document.getElementById("lan-ip");
       const altIpsRow = document.getElementById("alt-ips-row");
       const altIpsEl = document.getElementById("alt-ips");
@@ -308,6 +397,82 @@
       function setBackendStatus(ok, text) {
         backendStatus.textContent = text;
         backendStatus.className = "pill " + (ok ? "ok" : "warn");
+      }
+
+      function formatConnectedSince(timestamp) {
+        const elapsedMs = Math.max(0, Date.now() - timestamp);
+        const seconds = Math.floor(elapsedMs / 1000);
+        if (seconds < 60) return "Just connected";
+        const minutes = Math.floor(seconds / 60);
+        if (minutes < 60) return `Connected ${minutes}m ago`;
+        const hours = Math.floor(minutes / 60);
+        return `Connected ${hours}h ago`;
+      }
+
+      function applyConnectedClients(data) {
+        const clients = Array.isArray(data?.clients) ? data.clients : [];
+        const count = typeof data?.count === "number" ? data.count : clients.length;
+
+        if (count > 0) {
+          deviceStatus.textContent =
+            count === 1 ? "1 device connected" : `${count} devices connected`;
+          deviceStatus.className = "pill ok";
+          devicesBox.classList.remove("empty");
+          devicesEmpty.hidden = true;
+          devicesList.hidden = false;
+          devicesList.replaceChildren(
+            ...clients.map((client) => {
+              const item = document.createElement("li");
+              item.className = "device-item";
+
+              const name = document.createElement("span");
+              name.className = "device-name";
+              const dot = document.createElement("span");
+              dot.className = "device-dot";
+              dot.setAttribute("aria-hidden", "true");
+              name.appendChild(dot);
+              name.appendChild(
+                document.createTextNode(client.deviceName || "Mobile device")
+              );
+
+              const meta = document.createElement("span");
+              meta.className = "device-meta";
+              meta.textContent = formatConnectedSince(client.connectedAt || Date.now());
+
+              item.appendChild(name);
+              item.appendChild(meta);
+              return item;
+            })
+          );
+          return;
+        }
+
+        deviceStatus.textContent = "Waiting for phone…";
+        deviceStatus.className = "pill warn";
+        devicesBox.classList.add("empty");
+        devicesEmpty.hidden = false;
+        devicesList.hidden = true;
+        devicesList.replaceChildren();
+      }
+
+      async function fetchConnectedClients() {
+        const candidates = [CLIENTS_URL, FALLBACK_CLIENTS_URL].filter(
+          (url, index, all) => url && all.indexOf(url) === index
+        );
+
+        let lastError = null;
+        for (const url of candidates) {
+          try {
+            const res = await fetch(url, { cache: "no-store" });
+            if (!res.ok) {
+              throw new Error("Clients API unavailable");
+            }
+            return res.json();
+          } catch (err) {
+            lastError = err;
+          }
+        }
+        throw lastError || new Error("Clients API unavailable");
       }
 
       function formatCountdown(ms) {
@@ -423,12 +588,26 @@
       }
 
       async function fetchPairing() {
-        const url = ensurePairingApi();
-        const res = await fetch(url, { cache: "no-store" });
-        if (!res.ok) {
-          throw new Error("Pairing API unavailable");
+        const candidates = [
+          ensurePairingApi(),
+          DEFAULT_PAIRING_API,
+          FALLBACK_PAIRING_API,
+        ].filter((url, index, all) => url && all.indexOf(url) === index);
+
+        let lastError = null;
+        for (const url of candidates) {
+          try {
+            const res = await fetch(url, { cache: "no-store" });
+            if (!res.ok) {
+              throw new Error("Pairing API unavailable");
+            }
+            pairingApiUrl = url;
+            return res.json();
+          } catch (err) {
+            lastError = err;
+          }
         }
-        return res.json();
+        throw lastError || new Error("Pairing API unavailable");
       }
 
       async function refreshPairing() {
@@ -438,15 +617,33 @@
         refreshBtn.textContent = "Refreshing…";
         try {
           const base = ensurePairingApi();
-          const refreshUrl = base.replace(/\/api\/pairing$/, "/api/pairing/refresh");
-          const res = await fetch(refreshUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-          });
-          if (!res.ok) {
-            throw new Error("Refresh failed");
+          const refreshCandidates = [
+            base.replace(/\/api\/pairing$/, "/api/pairing/refresh"),
+            "/api/pairing/refresh",
+            `http://127.0.0.1:${DEFAULT_BACKEND_PORT}/api/pairing/refresh`,
+          ].filter((url, index, all) => url && all.indexOf(url) === index);
+
+          let data = null;
+          let lastError = null;
+          for (const refreshUrl of refreshCandidates) {
+            try {
+              const res = await fetch(refreshUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+              });
+              if (!res.ok) {
+                throw new Error("Refresh failed");
+              }
+              data = await res.json();
+              pairingApiUrl = refreshUrl.replace(/\/refresh$/, "");
+              break;
+            } catch (err) {
+              lastError = err;
+            }
           }
-          const data = await res.json();
+          if (!data) {
+            throw lastError || new Error("Refresh failed");
+          }
           applyPairing(data);
           setBackendStatus(true, "Online");
         } catch {
@@ -479,21 +676,34 @@
           portEl.textContent = String(status.port || DEFAULT_BACKEND_PORT);
           pairingApiUrl = status.pairingApi || DEFAULT_PAIRING_API;
 
-          const data = await fetchPairing();
-          applyPairing(data);
+          const [pairingData, clientsData] = await Promise.all([
+            fetchPairing(),
+            fetchConnectedClients().catch(() => ({ clients: [], count: 0 })),
+          ]);
+          applyPairing(pairingData);
+          applyConnectedClients(clientsData);
           setBackendStatus(true, "Online");
         } catch {
           // Status proxy may be down while host is up — still try pairing API.
           try {
             pairingApiUrl = DEFAULT_PAIRING_API;
-            const data = await fetchPairing();
-            applyPairing(data);
+            const [pairingData, clientsData] = await Promise.all([
+              fetchPairing(),
+              fetchConnectedClients().catch(() => ({ clients: [], count: 0 })),
+            ]);
+            applyPairing(pairingData);
+            applyConnectedClients(clientsData);
             setBackendStatus(true, "Online");
             return;
           } catch {
             // fall through
           }
           setBackendStatus(false, "Offline");
+          deviceStatus.textContent = "Offline";
+          deviceStatus.className = "pill warn";
+          devicesBox.classList.add("empty");
+          devicesEmpty.hidden = false;
+          devicesList.hidden = true;
           qrImage.hidden = true;
           qrPlaceholder.hidden = false;
           qrPlaceholder.textContent = "Waiting for host…";
@@ -529,7 +739,7 @@
       void refreshStatus();
       setInterval(() => {
         void refreshStatus();
-      }, 5000);
+      }, 3000);
       countdownTimer = setInterval(updateCountdown, 1000);
     </script>
   </body>

@@ -10,7 +10,7 @@ import {
 import { titusClient } from "../services/websocket";
 import { ServerMessage, ShellKind } from "../types/protocol";
 import { useTheme } from "../context/ThemeContext";
-import { dismissKeyboard, keyboardPersistTaps } from "../utils/keyboard";
+import { dismissKeyboard, keyboardPersistTaps, useCompactKeyboardLayout } from "../utils/keyboard";
 import { useTabBarInset } from "../hooks/useTabBarInset";
 import { useThemedStyles } from "../hooks/useThemedStyles";
 
@@ -205,6 +205,7 @@ export default function TerminalScreen({ isConnected, onError }: Props) {
   const scrollRef = useRef<ScrollView>(null);
   const promptCwd = useRef("");
   const tabBarInset = useTabBarInset();
+  const compactKeyboard = useCompactKeyboardLayout();
 
   const appendLine = useCallback((kind: TerminalLine["kind"], text: string) => {
     setLines((prev) => [
@@ -363,6 +364,7 @@ export default function TerminalScreen({ isConnected, onError }: Props) {
 
   return (
     <View style={styles.flex}>
+      {!compactKeyboard ? (
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Shell</Text>
         {shellOptions.length > 1 ? (
@@ -401,6 +403,7 @@ export default function TerminalScreen({ isConnected, onError }: Props) {
           {isRunning ? "Running..." : "Ready"}
         </Text>
       </View>
+      ) : null}
 
       <Pressable style={styles.output} onPress={dismissKeyboard}>
       <ScrollView
@@ -443,6 +446,7 @@ export default function TerminalScreen({ isConnected, onError }: Props) {
         />
       </View>
 
+      {!compactKeyboard ? (
       <View style={[styles.actions, { marginBottom: tabBarInset }]}>
         <Pressable
           style={[styles.historyBtn, history.length === 0 && styles.btnDisabled]}
@@ -472,6 +476,7 @@ export default function TerminalScreen({ isConnected, onError }: Props) {
           </Pressable>
         )}
       </View>
+      ) : null}
     </View>
   );
 }

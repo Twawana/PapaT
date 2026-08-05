@@ -9,6 +9,7 @@ import {
 import {
   cancelSession,
   canRetrySession,
+  clearSession,
   getSession,
   getSessionHistory,
   getSessionRunStatus,
@@ -16,7 +17,6 @@ import {
   listSessionRunStatuses,
   listSessions,
   setSessionLastError,
-  touchSessionMessages,
 } from "./session-store";
 import { runActiveAgentTurn } from "./providers/registry";
 import { AgentProviderRunContext } from "./providers/types";
@@ -151,7 +151,5 @@ export function cancelAgent(sessionId: string): boolean {
 }
 
 export function clearAgentSession(sessionId: string): void {
-  cancelSession(sessionId);
-  getSession(sessionId).messages.length = 0;
-  touchSessionMessages(sessionId);
+  clearSession(sessionId);
 }

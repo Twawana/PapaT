@@ -25,7 +25,7 @@ function listLanIps() {
     if (!iface) continue;
     const lower = name.toLowerCase();
     if (
-      /virtual|vethernet|vmware|vbox|hyper-v|docker|wsl|loopback|bluetooth|isatap|teredo/.test(
+      /virtual|vethernet|vmware|vbox|hyper-v|docker|wsl|loopback|bluetooth|isatap|teredo|cloudflare|warp|tailscale/.test(
         lower
       )
     ) {
@@ -75,11 +75,11 @@ function parseBackendOutput(text) {
 }
 
 function logBackend(message) {
-  process.stdout.write(`[PapaT Backend] ${message}`);
+  process.stdout.write(`[Titus Backend] ${message}`);
 }
 
 function logBackendError(message) {
-  process.stderr.write(`[PapaT Backend] ${message}`);
+  process.stderr.write(`[Titus Backend] ${message}`);
 }
 
 function getHostServerRoot() {
@@ -103,7 +103,7 @@ function resolveBackendEntry(hostServerRoot) {
 
   throw new Error(
     app.isPackaged
-      ? "PapaT host files are missing. Please reinstall the application."
+      ? "Titus host files are missing. Please reinstall the application."
       : `Backend not built. Run "npm run build:host" first.\nExpected: ${indexEntry}`
   );
 }
@@ -220,6 +220,42 @@ function contentTypeFor(filePath) {
   }
 }
 
+function proxyToBackend(req, res, targetPath) {
+  const options = {
+    hostname: "127.0.0.1",
+    port: BACKEND_PORT,
+    path: targetPath,
+    method: req.method || "GET",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+  };
+
+  const proxyReq = http.request(options, (proxyRes) => {
+    const chunks = [];
+    proxyRes.on("data", (chunk) => chunks.push(chunk));
+    proxyRes.on("end", () => {
+      res.writeHead(proxyRes.statusCode || 502, {
+        "Content-Type": proxyRes.headers["content-type"] || "application/json",
+        "Cache-Control": "no-store",
+      });
+      res.end(Buffer.concat(chunks));
+    });
+  });
+
+  proxyReq.on("error", () => {
+    res.writeHead(502, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Host not ready" }));
+  });
+
+  if (req.method === "POST" || req.method === "PUT") {
+    req.pipe(proxyReq);
+  } else {
+    proxyReq.end();
+  }
+}
+
 function startUiServer() {
   const uiRoot = path.join(__dirname, "desktop-ui");
 
@@ -229,7 +265,10 @@ function startUiServer() {
     if (requestPath === "/api/status") {
       const lanIps = listLanIps();
       const lanIp = lanIps[0] || "127.0.0.1";
-      res.writeHead(200, { "Content-Type": "application/json" });
+      res.writeHead(200, {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+      });
       res.end(
         JSON.stringify({
           lanIp,
@@ -237,9 +276,25 @@ function startUiServer() {
           port: BACKEND_PORT,
           pairingCode,
           wsUrl: `ws://${lanIp}:${BACKEND_PORT}`,
-          pairingApi: `http://127.0.0.1:${BACKEND_PORT}/api/pairing`,
+          // Same-origin proxy — desktop UI always loads QR from here.
+          pairingApi: "/api/pairing",
         })
       );
+      return;
+    }
+
+    if (requestPath === "/api/pairing") {
+      proxyToBackend(req, res, "/api/pairing");
+      return;
+    }
+
+    if (requestPath === "/api/pairing/refresh") {
+      proxyToBackend(req, res, "/api/pairing/refresh");
+      return;
+    }
+
+    if (requestPath === "/api/clients") {
+      proxyToBackend(req, res, "/api/clients");
       return;
     }
 
@@ -273,13 +328,13 @@ function startUiServer() {
 
 function createMainWindow() {
   mainWindow = new BrowserWindow({
-    width: 860,
-    height: 780,
-    minWidth: 720,
-    minHeight: 640,
+    width: 920,
+    height: 820,
+    minWidth: 760,
+    minHeight: 700,
     show: false,
     autoHideMenuBar: true,
-    title: "PapaT",
+    title: "Titus",
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -358,7 +413,7 @@ if (!gotLock) {
   });
 
   app.whenReady().then(bootstrap).catch((err) => {
-    console.error("[PapaT] Startup failed:", err);
+    console.error("[Titus] Startup failed:", err);
     app.quit();
   });
 

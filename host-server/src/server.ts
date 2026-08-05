@@ -1,8 +1,10 @@
 import * as os from "os";
+import * as fs from "fs";
 import { randomUUID } from "crypto";
 import { createServer as createHttpServer } from "http";
 import { WebSocket, WebSocketServer } from "ws";
 import { IncomingMessage } from "http";
+import { URL } from "url";
 import { config } from "./config";
 import {
   authenticateToken,
@@ -15,6 +17,7 @@ import {
   clearClientAuth,
   isClientAuthenticated,
   isLocalConnection,
+  listConnectedMobileClients,
   markClientAuthenticated,
 } from "./client-auth";
 import { executeCode, type ActiveExecution, type ExecuteLanguage } from "./executor";
@@ -64,7 +67,7 @@ import {
 import { listPackageScripts } from "./scripts";
 import { grepWorkspace, searchFiles } from "./search";
 import { initWorkspace, getWorkspaceRoot } from "./workspace-state";
-import { resolveFsPath, toClientPath } from "./path-utils";
+import { assertPathAllowed, resolveFsPath, toClientPath } from "./path-utils";
 import {
   bootstrapAgentSessions,
   cancelAgent,
@@ -110,6 +113,18 @@ const UNAUTHENTICATED_TYPES = new Set(["ping", "auth", "pair"]);
 const activeShellRuns = new WeakMap<WebSocket, Map<string, ActiveExecution>>();
 let broadcastMobileClients: ((message: ServerMessage, except?: WebSocket) => void) | null =
   null;
+
+function previewMimeFromPath(filePath: string): string {
+  const lower = filePath.toLowerCase();
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".gif")) return "image/gif";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".bmp")) return "image/bmp";
+  if (lower.endsWith(".svg")) return "image/svg+xml";
+  if (lower.endsWith(".pdf")) return "application/pdf";
+  return "application/octet-stream";
+}
 
 function buildConnectedMessage(deviceName?: string): Extract<
   import("./protocol").ServerMessage,
@@ -212,6 +227,71 @@ export function createServer(): WebSocketServer {
             })
           );
         });
+      return;
+    }
+
+    if (requestPath === "/api/clients" && method === "GET") {
+      const clients = listConnectedMobileClients();
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          clients,
+          count: clients.length,
+        })
+      );
+      return;
+    }
+
+    // Authenticated raw file preview for phone image viewing (HTTP is more
+    // reliable than embedding large base64 data URIs in React Native Image).
+    if (requestPath === "/api/fs/preview" && method === "GET") {
+      void (async () => {
+        try {
+          const requestUrl = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+          const filePath = requestUrl.searchParams.get("path") ?? "";
+          const token = requestUrl.searchParams.get("token") ?? "";
+
+          if (isAuthRequired() && !authenticateToken(token)) {
+            res.writeHead(401, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Unauthorized" }));
+            return;
+          }
+          if (!filePath) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Missing path" }));
+            return;
+          }
+
+          const absolutePath = resolveFsPath(filePath);
+          await assertPathAllowed(absolutePath);
+          const stat = await fs.promises.stat(absolutePath);
+          if (!stat.isFile()) {
+            res.writeHead(404, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Not a file" }));
+            return;
+          }
+          if (stat.size > 12_000_000) {
+            res.writeHead(413, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "File too large to preview" }));
+            return;
+          }
+
+          const mime = previewMimeFromPath(absolutePath);
+          res.writeHead(200, {
+            "Content-Type": mime,
+            "Content-Length": String(stat.size),
+            "Cache-Control": "private, max-age=60",
+          });
+          fs.createReadStream(absolutePath).pipe(res);
+        } catch (err) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(
+            JSON.stringify({
+              error: err instanceof Error ? err.message : "Preview failed",
+            })
+          );
+        }
+      })();
       return;
     }
 

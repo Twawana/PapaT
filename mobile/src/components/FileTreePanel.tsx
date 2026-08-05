@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Pressable,
   Text,
@@ -9,17 +8,24 @@ import {
 } from "react-native";
 import { useTheme } from "../context/ThemeContext";
 import { useThemedStyles } from "../hooks/useThemedStyles";
+import { useFileEntryOperations } from "../hooks/useFileEntryOperations";
 import { titusClient } from "../services/websocket";
 import { FileEntry } from "../types/protocol";
-import { copyPathToClipboard } from "../utils/clipboard";
+import { isPathRoot, parentPath } from "../utils/paths";
 
 interface Props {
   visible: boolean;
   workspaceKey?: string | null;
   onOpenFile: (path: string) => void;
+  onError?: (message: string | null) => void;
 }
 
-export function FileTreePanel({ visible, workspaceKey, onOpenFile }: Props) {
+export function FileTreePanel({
+  visible,
+  workspaceKey,
+  onOpenFile,
+  onError,
+}: Props) {
   const { colors } = useTheme();
   const styles = useThemedStyles((c) => ({
     panel: {
@@ -52,6 +58,11 @@ export function FileTreePanel({ visible, workspaceKey, onOpenFile }: Props) {
       flex: 1,
       color: c.textMuted,
       fontSize: 11,
+    },
+    hint: {
+      color: c.textMuted,
+      fontSize: 10,
+      marginBottom: 4,
     },
     loader: {
       marginTop: 12,
@@ -90,6 +101,12 @@ export function FileTreePanel({ visible, workspaceKey, onOpenFile }: Props) {
     }
   }, []);
 
+  const { openEntryActions, OperationModals } = useFileEntryOperations({
+    onError: onError ?? (() => {}),
+    onChanged: () => load(path),
+    onOpenInEditor: onOpenFile,
+  });
+
   useEffect(() => {
     setPath(".");
   }, [workspaceKey]);
@@ -100,35 +117,25 @@ export function FileTreePanel({ visible, workspaceKey, onOpenFile }: Props) {
     }
   }, [visible, load, path, workspaceKey]);
 
-  const showEntryActions = (entry: FileEntry) => {
-    Alert.alert(entry.name, undefined, [
-      {
-        text: "Copy Path",
-        onPress: () => void copyPathToClipboard(entry.path),
-      },
-      { text: "Cancel", style: "cancel" },
-    ]);
-  };
-
   if (!visible) return null;
 
   return (
     <View style={styles.panel}>
       <View style={styles.header}>
         <Pressable
-          disabled={path === "."}
+          disabled={isPathRoot(path)}
           onPress={() => {
-            const parts = path.split("/").filter(Boolean);
-            parts.pop();
-            void load(parts.length ? parts.join("/") : ".");
+            void load(parentPath(path));
           }}
         >
-          <Text style={[styles.up, path === "." && styles.disabled]}>↑</Text>
+          <Text style={[styles.up, isPathRoot(path) && styles.disabled]}>↑</Text>
         </Pressable>
         <Text style={styles.path} numberOfLines={1}>
           {path}
         </Text>
       </View>
+
+      <Text style={styles.hint}>Hold to rename, move, or delete</Text>
 
       {loading ? (
         <ActivityIndicator color={colors.accent} style={styles.loader} />
@@ -146,7 +153,8 @@ export function FileTreePanel({ visible, workspaceKey, onOpenFile }: Props) {
                   onOpenFile(item.path);
                 }
               }}
-              onLongPress={() => showEntryActions(item)}
+              onLongPress={() => openEntryActions(item)}
+              delayLongPress={350}
             >
               <Text style={styles.icon}>{item.entryType === "directory" ? "📁" : "📄"}</Text>
               <Text style={styles.name} numberOfLines={1}>
@@ -156,6 +164,8 @@ export function FileTreePanel({ visible, workspaceKey, onOpenFile }: Props) {
           )}
         />
       )}
+
+      <OperationModals />
     </View>
   );
 }

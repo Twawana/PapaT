@@ -253,6 +253,10 @@ export class TitusClient {
     return { host: this.lastConnectHost, port: this.lastConnectPort };
   }
 
+  getAuthToken(): string | null {
+    return this.lastConnectOptions.token ?? null;
+  }
+
   private handleAuthRequired(): void {
     const options = this.pendingConnect ?? {};
 

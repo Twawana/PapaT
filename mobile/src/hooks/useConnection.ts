@@ -77,7 +77,7 @@ export function useConnection() {
         }
       })
       .catch((err) => {
-        console.error("[PapaT] Failed to load saved credentials", err);
+        console.error("[Titus] Failed to load saved credentials", err);
       });
   }, []);
 
@@ -172,7 +172,7 @@ export function useConnection() {
             port: String(connectPort),
             deviceName: message.deviceName,
           }).catch((err) => {
-            console.error("[PapaT] Failed to save credentials", err);
+            console.error("[Titus] Failed to save credentials", err);
           });
         } else if (savedTokenRef.current) {
           titusClient.updateReconnectToken(
@@ -186,7 +186,7 @@ export function useConnection() {
             port: String(connectPort),
             deviceName: message.deviceName,
           }).catch((err) => {
-            console.error("[PapaT] Failed to update saved host", err);
+            console.error("[Titus] Failed to update saved host", err);
           });
         }
       }
@@ -312,7 +312,7 @@ export function useConnection() {
       }
       if (!host.trim()) {
         setError(
-          "Enter your PC's Wi-Fi IP from the PapaT desktop app (or scan the QR)"
+          "Enter your PC's Wi-Fi IP from the Titus desktop app (or scan the QR)"
         );
         setConnectionStatus("error");
         return;
@@ -341,7 +341,7 @@ export function useConnection() {
     (qrHost: string, qrPort: number, code: string) => {
       if (isLocalhostHost(qrHost) && Platform.OS !== "web") {
         setError(
-          "This QR has localhost — PapaT could not find your PC's Wi-Fi IP. Check the desktop app address, or enter the IP manually."
+          "This QR has localhost — Titus could not find your PC's Wi-Fi IP. Check the desktop app address, or enter the IP manually."
         );
         setConnectionStatus("error");
         return;
@@ -365,14 +365,14 @@ export function useConnection() {
     (code: string) => {
       const trimmed = code.trim().toUpperCase();
       if (!trimmed) {
-        setError("Enter the 6-character code from the PapaT desktop app");
+        setError("Enter the 6-character code from the Titus desktop app");
         setConnectionStatus("error");
         return;
       }
       const hostTrimmed = host.trim();
       if (!hostTrimmed) {
         setError(
-          "Enter your PC's Wi-Fi IP from the PapaT desktop app (or scan the QR instead)"
+          "Enter your PC's Wi-Fi IP from the Titus desktop app (or scan the QR instead)"
         );
         setConnectionStatus("error");
         return;
@@ -389,7 +389,7 @@ export function useConnection() {
       }
       if (isLocalhostHost(hostTrimmed) && Platform.OS !== "web") {
         setError(
-          "localhost won't work on a phone. Use your PC's Wi-Fi IP from the PapaT desktop app."
+          "localhost won't work on a phone. Use your PC's Wi-Fi IP from the Titus desktop app."
         );
         setConnectionStatus("error");
         return;

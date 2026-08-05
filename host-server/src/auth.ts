@@ -122,11 +122,11 @@ export function pairWithCode(code: string, deviceName?: string): AuthSuccess {
   // Small clock-skew grace so phone + PC clocks near expiry still succeed.
   if (!activePairing || activePairing.expiresAt + 2000 <= Date.now()) {
     rotatePairingCode();
-    throw new Error("Pairing code expired — tap Refresh code in the PapaT desktop app");
+    throw new Error("Pairing code expired — tap Refresh code in the Titus desktop app");
   }
 
   if (normalized !== activePairing.code) {
-    throw new Error("Invalid pairing code — use the code shown in the PapaT desktop app now");
+    throw new Error("Invalid pairing code — use the code shown in the Titus desktop app now");
   }
 
   rotatePairingCode();
@@ -216,7 +216,7 @@ export function listLanIps(): string[] {
     if (!iface) continue;
     const lower = name.toLowerCase();
     if (
-      /virtual|vethernet|vmware|vbox|hyper-v|docker|wsl|loopback|bluetooth|isatap|teredo/.test(
+      /virtual|vethernet|vmware|vbox|hyper-v|docker|wsl|loopback|bluetooth|isatap|teredo|cloudflare|warp|tailscale/.test(
         lower
       )
     ) {

@@ -115,7 +115,7 @@ export function QrPairModal({ visible, onClose, onScanned, onError }: Props) {
     const payload = parsePairQrData(data);
     if (!payload) {
       lockBriefly();
-      showError("Invalid PapaT QR code — scan the QR shown in the PapaT desktop app");
+      showError("Invalid Titus QR code — scan the QR shown in the Titus desktop app");
       return;
     }
 
@@ -123,7 +123,7 @@ export function QrPairModal({ visible, onClose, onScanned, onError }: Props) {
     if (payload.expiresAt && payload.expiresAt + 2000 <= Date.now()) {
       lockBriefly();
       showError(
-        "QR code expired — tap Refresh code in the PapaT desktop app, then scan again"
+        "QR code expired — tap Refresh code in the Titus desktop app, then scan again"
       );
       return;
     }
@@ -146,7 +146,7 @@ export function QrPairModal({ visible, onClose, onScanned, onError }: Props) {
         </View>
 
         <Text style={styles.hint}>
-          Point your camera at the QR code in the PapaT desktop window on your PC.
+          Point your camera at the QR code in the Titus desktop window on your PC.
           Phone and PC must be on the same Wi-Fi (not a guest/isolated network).
         </Text>
 

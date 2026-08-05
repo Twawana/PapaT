@@ -1,9 +1,9 @@
 {
   "expo": {
-    "name": "PapaT",
+    "name": "Titus",
     "slug": "papat",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
@@ -27,6 +27,7 @@
       "package": "com.papat.mobile",
       "versionCode": 1,
       "usesCleartextTraffic": true,
+      "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.INTERNET",
@@ -40,16 +41,22 @@
     "plugins": [
       "expo-asset",
       [
+        "expo-screen-orientation",
+        {
+          "initialOrientation": "DEFAULT"
+        }
+      ],
+      [
         "expo-camera",
         {
-          "cameraPermission": "Allow PapaT to scan the pairing QR code on your PC."
+          "cameraPermission": "Allow Titus to scan the pairing QR code on your PC."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow PapaT to attach photos to agent prompts.",
-          "cameraPermission": "Allow PapaT to take photos for agent prompts."
+          "photosPermission": "Allow Titus to attach photos to agent prompts.",
+          "cameraPermission": "Allow Titus to take photos for agent prompts."
         }
       ],
       "expo-secure-store"

@@ -12,6 +12,7 @@ import { useTabBarInset } from "../hooks/useTabBarInset";
 import { useThemedStyles } from "../hooks/useThemedStyles";
 import { titusClient } from "../services/websocket";
 import { BrowseEntry, BrowseRoot, EditorId, RecentFolder } from "../types/protocol";
+import { isPathRoot, normalizePath, parentPath } from "../utils/paths";
 
 interface Props {
   isConnected: boolean;
@@ -338,7 +339,7 @@ export default function ProjectsScreen({
       const first = roots.roots[0]?.path;
       if (first) {
         const listing = await titusClient.browseList(first);
-        setBrowsePath(listing.path);
+        setBrowsePath(normalizePath(listing.path));
         setBrowseEntries(listing.entries);
       }
     } catch (err) {
@@ -353,7 +354,7 @@ export default function ProjectsScreen({
     setBrowseLoading(true);
     try {
       const listing = await titusClient.browseList(path);
-      setBrowsePath(listing.path);
+      setBrowsePath(normalizePath(listing.path));
       setBrowseEntries(listing.entries);
     } catch (err) {
       onError(err instanceof Error ? err.message : "Failed to open folder");
@@ -363,17 +364,8 @@ export default function ProjectsScreen({
   };
 
   const browseParent = () => {
-    if (!browsePath) return;
-    const parts = browsePath.replace(/\\/g, "/").split("/").filter(Boolean);
-    if (parts.length <= 1) {
-      return;
-    }
-    parts.pop();
-    const parent =
-      browsePath.includes(":\\") || browsePath.match(/^[A-Za-z]:/)
-        ? `${parts[0]}:/${parts.slice(1).join("/")}`.replace(/\//g, "\\")
-        : `/${parts.join("/")}`;
-    enterBrowseFolder(parent);
+    if (!browsePath || isPathRoot(browsePath)) return;
+    void enterBrowseFolder(parentPath(browsePath));
   };
 
   const selectBrowsedFolder = () => {

@@ -27,6 +27,8 @@ export interface OpenFile {
   loading: boolean;
   runLanguage: ExecuteLanguage;
   previewMode?: "editor" | "markdown" | "image";
+  encoding?: "utf-8" | "base64";
+  mimeType?: string;
 }
 
 interface EditorContextValue {
@@ -115,6 +117,8 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
                   content: result.content,
                   savedContent: result.content,
                   loading: false,
+                  encoding: result.encoding ?? "utf-8",
+                  mimeType: result.mimeType,
                 }
               : tab
           )

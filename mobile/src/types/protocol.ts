@@ -253,6 +253,8 @@ export type ServerMessage =
       content: string;
       size: number;
       mtime: number;
+      encoding?: "utf-8" | "base64";
+      mimeType?: string;
     }
   | {
       type: "fs_write_result";

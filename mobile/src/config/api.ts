@@ -1,7 +1,7 @@
 import { Platform } from "react-native";
 
 /**
- * PapaT host-server port (WebSocket). Backend default: 3847, binds to 0.0.0.0.
+ * Titus host-server port (WebSocket). Backend default: 3847, binds to 0.0.0.0.
  * Override with EXPO_PUBLIC_HOST_PORT in mobile/.env
  */
 export const HOST_SERVER_PORT = Number(
@@ -10,7 +10,7 @@ export const HOST_SERVER_PORT = Number(
 
 /**
  * Example LAN IP shown in UI placeholders (dev only).
- * Users always enter their own PC address after installing PapaT on desktop.
+ * Users always enter their own PC address after installing Titus on desktop.
  */
 export const DEV_LOCAL_IP =
   process.env.EXPO_PUBLIC_DEV_HOST?.trim() || "192.168.1.100";
@@ -73,12 +73,12 @@ export function formatConnectionError(
   }
 
   const hint = isLocalhostHost(host)
-    ? " Replace localhost with your PC's Wi-Fi IP from the PapaT desktop app."
+    ? " Replace localhost with your PC's Wi-Fi IP from the Titus desktop app."
     : "";
 
   const base =
-    `Cannot reach PapaT host at ${buildWebSocketUrl(host, port)}.` +
-    ` Open PapaT on your PC, use the same Wi-Fi (not guest/isolated),` +
+    `Cannot reach Titus host at ${buildWebSocketUrl(host, port)}.` +
+    ` Open Titus on your PC, use the same Wi-Fi (not guest/isolated),` +
     ` and allow inbound TCP port ${port} in Windows Firewall if prompted.${hint}`;
 
   return detail && !detail.startsWith("Cannot reach") ? `${base} (${detail})` : base;
@@ -88,9 +88,9 @@ export const CONNECTION_HELP = {
   port: HOST_SERVER_PORT,
   suggestedHost: DEV_LOCAL_IP,
   steps: [
-    "Install PapaT on your PC and open it (Start Menu > PapaT)",
+    "Install Titus on your PC and open it (Start Menu > Titus)",
     "Connect phone and PC to the same Wi-Fi (avoid guest / AP isolation networks)",
-    "Scan the QR code shown in the PapaT desktop window",
+    "Scan the QR code shown in the Titus desktop window",
     `If it fails to connect, allow inbound TCP port ${HOST_SERVER_PORT} in Windows Firewall`,
     "Or enter the PC address and 6-character code manually from the desktop app",
   ],

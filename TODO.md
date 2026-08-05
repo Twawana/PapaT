@@ -1,4 +1,4 @@
-# PapaT Connection Simplification - TODO
+# Titus Connection Simplification - TODO
 
 ## Completed Steps:
 

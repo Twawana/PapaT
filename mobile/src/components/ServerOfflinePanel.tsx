@@ -60,7 +60,7 @@ export function ServerOfflinePanel({ connectionStatus }: Props) {
         <Text style={styles.title}>Connect to your PC</Text>
         <Text style={styles.subtitle}>
           Tap <Text style={{ fontWeight: "700" }}>Scan QR Code to Connect</Text>{" "}
-          and point your camera at the QR in the PapaT desktop app.
+          and point your camera at the QR in the Titus desktop app.
         </Text>
         {CONNECTION_HELP.steps.map((step, index) => (
           <Text key={step} style={styles.step}>

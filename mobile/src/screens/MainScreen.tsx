@@ -23,6 +23,7 @@ import { useEditor } from "../context/EditorContext";
 import {
   dismissKeyboard,
   keyboardAvoidBehavior,
+  useCompactKeyboardLayout,
   useKeyboardVisible,
 } from "../utils/keyboard";
 import { useConnection } from "../hooks/useConnection";
@@ -100,7 +101,7 @@ export default function MainScreen() {
 
   const selectTabRef = React.useRef<(tab: TabId) => void>(() => {});
 
-  const navContext = useMemo(
+  const navContextBase = useMemo(
     () => ({
       isConnected: connection.isConnected,
       vscodeConnected: connection.vscodeConnected,
@@ -113,6 +114,7 @@ export default function MainScreen() {
         selectTabRef.current("code");
       },
       selectTab: (tab: TabId) => selectTabRef.current(tab),
+      activeTab: "open" as TabId,
     }),
     [
       connection.isConnected,
@@ -125,8 +127,16 @@ export default function MainScreen() {
     ]
   );
 
-  const navigation = useNavigationTabs(navContext);
+  const navigation = useNavigationTabs(navContextBase);
   selectTabRef.current = navigation.selectTab;
+
+  const navContext = useMemo(
+    () => ({
+      ...navContextBase,
+      activeTab: navigation.activeTab,
+    }),
+    [navContextBase, navigation.activeTab]
+  );
 
   useEffect(() => {
     const tab = navigation.activeTab;
@@ -173,48 +183,58 @@ export default function MainScreen() {
   ]);
 
   const keyboardVisible = useKeyboardVisible();
+  const compactKeyboard = useCompactKeyboardLayout();
   const contentInset = keyboardVisible ? insets.bottom : 0;
   const showHeaderExtras = !connection.isConnected || connectionDetailsVisible;
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
+    <SafeAreaView
+      style={styles.safe}
+      edges={compactKeyboard ? [] : ["top"]}
+    >
       <EditorActionBridge actionsRef={editorActionsRef} />
-      <StatusBar style={isDark ? "light" : "dark"} />
+      <StatusBar style={isDark ? "light" : "dark"} hidden={compactKeyboard} />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={keyboardAvoidBehavior()}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
+        keyboardVerticalOffset={
+          compactKeyboard ? 0 : Platform.OS === "ios" ? 8 : 0
+        }
       >
         <KeyboardDismissView style={styles.flex}>
-        <View style={styles.header}>
-          <Pressable style={styles.titleWrap} onPress={dismissKeyboard}>
-            <Text style={styles.title}>PapaT</Text>
-          </Pressable>
-          {showHeaderExtras ? <ThemeToggle /> : null}
-        </View>
+        {!compactKeyboard ? (
+          <View style={styles.header}>
+            <Pressable style={styles.titleWrap} onPress={dismissKeyboard}>
+              <Text style={styles.title}>PapaT</Text>
+            </Pressable>
+            {showHeaderExtras ? <ThemeToggle /> : null}
+          </View>
+        ) : null}
 
-        <ConnectionBar
-          host={connection.host}
-          port={connection.port}
-          connectionStatus={connection.connectionStatus}
-          serverInfo={connection.serverInfo}
-          vscodeConnected={connection.vscodeConnected}
-          deviceName={connection.deviceName}
-          isPaired={connection.isPaired}
-          error={connection.error}
-          onHostChange={connection.setHost}
-          onPortChange={connection.setPort}
-          onConnect={connection.handleConnect}
-          onDisconnect={connection.handleDisconnect}
-          onPairFromQr={connection.handlePairFromQr}
-          onPairWithCode={connection.handlePairWithCode}
-          onForgetDevice={connection.handleForgetDevice}
-          onError={connection.setError}
-          detailsVisible={connectionDetailsVisible}
-          onDetailsVisibleChange={setConnectionDetailsVisible}
-        />
+        {!compactKeyboard ? (
+          <ConnectionBar
+            host={connection.host}
+            port={connection.port}
+            connectionStatus={connection.connectionStatus}
+            serverInfo={connection.serverInfo}
+            vscodeConnected={connection.vscodeConnected}
+            deviceName={connection.deviceName}
+            isPaired={connection.isPaired}
+            error={connection.error}
+            onHostChange={connection.setHost}
+            onPortChange={connection.setPort}
+            onConnect={connection.handleConnect}
+            onDisconnect={connection.handleDisconnect}
+            onPairFromQr={connection.handlePairFromQr}
+            onPairWithCode={connection.handlePairWithCode}
+            onForgetDevice={connection.handleForgetDevice}
+            onError={connection.setError}
+            detailsVisible={connectionDetailsVisible}
+            onDetailsVisibleChange={setConnectionDetailsVisible}
+          />
+        ) : null}
 
-        {connection.backgroundContinued && !connection.isConnected ? (
+        {connection.backgroundContinued && !connection.isConnected && !compactKeyboard ? (
           <Text style={styles.backgroundHint}>
             PC tasks keep running in the background. Reconnecting…
           </Text>

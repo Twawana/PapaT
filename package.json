@@ -1,9 +1,9 @@
 {
   "name": "papat",
   "version": "1.0.0",
-  "description": "PapaT — control your PC from your phone",
+  "description": "Titus — control your PC from your phone",
   "main": "main.js",
-  "author": "PapaT",
+  "author": "Titus",
   "scripts": {
     "postinstall": "npm install --prefix host-server",
     "prestart": "npm run build:host",
@@ -20,8 +20,8 @@
   },
   "build": {
     "appId": "com.papat.app",
-    "productName": "PapaT",
-    "copyright": "Copyright © PapaT",
+    "productName": "Titus",
+    "copyright": "Copyright © Titus",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -63,11 +63,11 @@
       "allowElevation": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "PapaT",
+      "shortcutName": "Titus",
       "runAfterFinish": true,
       "installerLanguages": ["en_US"],
-      "uninstallDisplayName": "PapaT",
-      "artifactName": "PapaT-Setup-${version}.${ext}"
+      "uninstallDisplayName": "Titus",
+      "artifactName": "Titus-Setup-${version}.${ext}"
     }
   }
 }

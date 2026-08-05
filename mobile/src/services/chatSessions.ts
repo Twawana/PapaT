@@ -3,9 +3,21 @@ import { AgentSessionSummary } from "../types/protocol";
 
 const SESSIONS_KEY = "titus.agent.sessions";
 const ACTIVE_SESSION_KEY = "titus.agent.activeSessionId";
+const MAX_STORED_SESSIONS = 40;
 
 export function createSessionId(): string {
   return `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function trimSessions(sessions: AgentSessionSummary[]): AgentSessionSummary[] {
+  return sessions
+    .slice()
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, MAX_STORED_SESSIONS)
+    .map((session) => ({
+      ...session,
+      title: session.title.slice(0, 60),
+    }));
 }
 
 export async function loadSavedSessions(): Promise<AgentSessionSummary[]> {
@@ -15,14 +27,28 @@ export async function loadSavedSessions(): Promise<AgentSessionSummary[]> {
       return [];
     }
     const parsed = JSON.parse(raw) as AgentSessionSummary[];
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? trimSessions(parsed) : [];
   } catch {
     return [];
   }
 }
 
 export async function saveSessions(sessions: AgentSessionSummary[]): Promise<void> {
-  await SecureStore.setItemAsync(SESSIONS_KEY, JSON.stringify(sessions));
+  const trimmed = trimSessions(sessions);
+  try {
+    await SecureStore.setItemAsync(SESSIONS_KEY, JSON.stringify(trimmed));
+  } catch (err) {
+    // SecureStore can reject oversized values — keep trying with fewer entries.
+    console.error("[Titus] Failed to save chat sessions", err);
+    try {
+      await SecureStore.setItemAsync(
+        SESSIONS_KEY,
+        JSON.stringify(trimmed.slice(0, 15))
+      );
+    } catch {
+      // ignore
+    }
+  }
 }
 
 export async function loadActiveSessionId(): Promise<string | null> {
@@ -54,7 +80,7 @@ export function mergeSessionLists(
     }
   }
 
-  return [...merged.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+  return trimSessions([...merged.values()]);
 }
 
 export function upsertSession(
@@ -63,7 +89,7 @@ export function upsertSession(
 ): AgentSessionSummary[] {
   const next = sessions.filter((item) => item.sessionId !== session.sessionId);
   next.unshift(session);
-  return next;
+  return trimSessions(next);
 }
 
 export function removeSession(
@@ -74,9 +100,30 @@ export function removeSession(
 }
 
 export function sessionTitleFromMessage(message: string): string {
-  const trimmed = message.trim();
+  const trimmed = message.trim().replace(/\s+/g, " ");
   if (!trimmed) {
     return "New chat";
   }
   return trimmed.length > 60 ? `${trimmed.slice(0, 57)}...` : trimmed;
+}
+
+export function formatSessionTime(timestamp: number): string {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const sameDay =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+
+  if (sameDay) {
+    return date.toLocaleTimeString(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
 }
