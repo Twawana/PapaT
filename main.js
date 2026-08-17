@@ -6,9 +6,9 @@ const os = require("os");
 const path = require("path");
 const net = require("net");
 
-const BACKEND_PORT = Number(process.env.PAPAT_PORT || process.env.TITUS_PORT || 3847);
-const UI_PORT = Number(process.env.PAPAT_UI_PORT || 3000);
-const STARTUP_DELAY_MS = Number(process.env.PAPAT_STARTUP_DELAY_MS || 2000);
+const BACKEND_PORT = Number(process.env.TITUS_PORT || process.env.PAPAT_PORT || 3847);
+const UI_PORT = Number(process.env.TITUS_UI_PORT || process.env.PAPAT_UI_PORT || 3000);
+const STARTUP_DELAY_MS = Number(process.env.TITUS_STARTUP_DELAY_MS || process.env.PAPAT_STARTUP_DELAY_MS || 2000);
 const BACKEND_READY_TIMEOUT_MS = 30_000;
 
 let serverProcess = null;
@@ -142,11 +142,8 @@ function startBackendServer() {
     env: {
       ...process.env,
       ...extraEnv,
-      PAPAT_PORT: String(BACKEND_PORT),
       TITUS_PORT: String(BACKEND_PORT),
-      PAPAT_WORKSPACE: workspaceDir,
       TITUS_WORKSPACE: workspaceDir,
-      PAPAT_HOST: "0.0.0.0",
       TITUS_HOST: "0.0.0.0",
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -400,7 +397,7 @@ if (!gotLock) {
   app.quit();
 } else {
   if (process.platform === "win32") {
-    app.setAppUserModelId("com.papat.app");
+    app.setAppUserModelId("com.titus.app");
   }
 
   app.on("second-instance", () => {

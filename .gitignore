@@ -4,6 +4,7 @@ dist2/
 host-server/node_modules/
 host-server/dist/
 mobile/node_modules/
+vscode-extension/node_modules/
 mobile/_asset-temp/
 *.log
 .env

@@ -225,7 +225,7 @@ export default function MainScreen() {
           >
             <Pressable style={styles.titleWrap} onPress={dismissKeyboard}>
               <Text style={[styles.title, { fontSize: screen.titleSize }]}>
-                PapaT
+                Titus
               </Text>
             </Pressable>
             {showHeaderExtras ? <ThemeToggle /> : null}

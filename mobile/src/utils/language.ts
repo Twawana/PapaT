@@ -68,7 +68,7 @@ export function imageDataUri(
   return `data:${mime};base64,${base64}`;
 }
 
-/** HTTP preview URL served by the PapaT host (preferred for phone Image). */
+/** HTTP preview URL served by the Titus host (preferred for phone Image). */
 export function imagePreviewHttpUrl(
   host: string,
   port: number,

@@ -69,8 +69,6 @@ node scripts/test-client.js
 | `TITUS_REQUIRE_AUTH` | `true` | Require QR pairing / device token for mobile clients |
 | `TITUS_PAIRING_TTL_MS` | `120000` | Pairing code lifetime (ms); QR refreshes on host |
 
-Legacy `PAPAT_*` environment variables are still accepted as fallbacks.
-
 ## Auth & QR Pairing (MVP 6)
 
 By default, the host **requires authentication**. Unpaired clients cannot read files, run code, or use the agent.
@@ -100,7 +98,7 @@ Then tap **Scan QR** is not needed — use the code from terminal with a future 
 TITUS_REQUIRE_AUTH=false npm start
 ```
 
-Paired device tokens are stored in `%USERPROFILE%\.titus\tokens.json` on the PC (legacy `.papat` data is read automatically if present).
+Paired device tokens are stored in `%USERPROFILE%\.titus\tokens.json` on the PC.
 
 ## VS Code Integration (MVP 7)
 

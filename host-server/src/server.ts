@@ -188,7 +188,7 @@ export function createServer(): WebSocketServer {
       res.end(
         JSON.stringify({
           status: "ok",
-          service: "papat-host",
+          service: "titus-host",
           version: SERVER_VERSION,
         })
       );

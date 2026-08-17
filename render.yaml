@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: papat
+    name: titus
     runtime: node
     rootDir: host-server
     buildCommand: npm install && npm run build
@@ -9,5 +9,5 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PAPAT_HOST
+      - key: TITUS_HOST
         value: 0.0.0.0

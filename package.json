@@ -1,5 +1,5 @@
 {
-  "name": "papat",
+  "name": "titus",
   "version": "1.0.0",
   "description": "Titus — control your PC from your phone",
   "main": "main.js",
@@ -19,7 +19,7 @@
     "electron-builder": "^26.15.3"
   },
   "build": {
-    "appId": "com.papat.app",
+    "appId": "com.titus.app",
     "productName": "Titus",
     "copyright": "Copyright © Titus",
     "directories": {

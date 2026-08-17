@@ -33,7 +33,7 @@ export const DEFAULT_PORT = String(HOST_SERVER_PORT);
 /** Reserved for future cloud features; phone connects to the user's PC over LAN. */
 export const API_BASE_URL = __DEV__
   ? `http://${DEV_LOCAL_IP}:${HOST_SERVER_PORT}`
-  : "https://papat.onrender.com";
+  : "https://titus.onrender.com";
 
 export function buildWebSocketUrl(
   host: string,

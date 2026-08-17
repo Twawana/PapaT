@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Titus",
-    "slug": "papat",
+    "slug": "titus",
     "version": "1.0.2",
     "orientation": "default",
     "icon": "./assets/icon.png",
@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.papat.mobile",
+      "bundleIdentifier": "com.titus.mobile",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -24,7 +24,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0d1117"
       },
-      "package": "com.papat.mobile",
+      "package": "com.titus.mobile",
       "versionCode": 4,
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [

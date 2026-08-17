@@ -1,4 +1,4 @@
-# Builds PapaT Android App Bundle (.aab) for Google Play Store.
+# Builds Titus Android App Bundle (.aab) for Google Play Store.
 
 $ErrorActionPreference = "Stop"
 $Mobile = Split-Path -Parent $PSScriptRoot

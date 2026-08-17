@@ -117,7 +117,7 @@ export function ImagePreview({
       {label ? <Text style={styles.label}>{label}</Text> : null}
       {failed ? (
         <Text style={styles.error}>
-          Could not display this image. Restart PapaT on your PC, reconnect, and
+          Could not display this image. Restart Titus on your PC, reconnect, and
           open the file again.
         </Text>
       ) : mode === "http" && httpUri ? (
