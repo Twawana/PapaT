@@ -1,0 +1,12 @@
+# Dependencies — EAS installs these on the build server
+node_modules/
+
+# Local Expo / build junk
+.expo/
+dist/
+web-build/
+*.log
+.DS_Store
+
+# Leftover temp project copy (was ~270MB and broke uploads)
+_asset-temp/
