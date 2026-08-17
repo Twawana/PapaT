@@ -1,13 +1,12 @@
 node_modules/
 dist/
+dist2/
 host-server/node_modules/
 host-server/dist/
 mobile/node_modules/
+mobile/_asset-temp/
 *.log
 .env
 .DS_Store
-node_modules/
 .expo/
-dist/
 build/
-.env

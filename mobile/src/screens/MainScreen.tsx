@@ -28,6 +28,7 @@ import {
 } from "../utils/keyboard";
 import { useConnection } from "../hooks/useConnection";
 import { useNavigationTabs } from "../hooks/useNavigationTabs";
+import { useScreenLayout } from "../hooks/useScreenLayout";
 import { titusClient } from "../services/websocket";
 import { ThemeColors } from "../theme/colors";
 
@@ -58,6 +59,7 @@ export default function MainScreen() {
   const [connectionDetailsVisible, setConnectionDetailsVisible] = useState(true);
   const connection = useConnection();
   const insets = useSafeAreaInsets();
+  const screen = useScreenLayout();
   const editorActionsRef = useRef<EditorActions>({
     openFile: async () => {},
     resetForWorkspace: () => {},
@@ -202,10 +204,29 @@ export default function MainScreen() {
         }
       >
         <KeyboardDismissView style={styles.flex}>
+        <View
+          style={[
+            styles.body,
+            {
+              paddingLeft: screen.contentPadLeft,
+              paddingRight: screen.contentPadRight,
+            },
+          ]}
+        >
         {!compactKeyboard ? (
-          <View style={styles.header}>
+          <View
+            style={[
+              styles.header,
+              {
+                paddingTop: screen.headerPadTop,
+                paddingBottom: screen.headerPadBottom,
+              },
+            ]}
+          >
             <Pressable style={styles.titleWrap} onPress={dismissKeyboard}>
-              <Text style={styles.title}>PapaT</Text>
+              <Text style={[styles.title, { fontSize: screen.titleSize }]}>
+                PapaT
+              </Text>
             </Pressable>
             {showHeaderExtras ? <ThemeToggle /> : null}
           </View>
@@ -242,25 +263,23 @@ export default function MainScreen() {
 
         <View style={[styles.content, { paddingBottom: contentInset }]}>
           {connection.isConnected ? (
-            navigation.tabs.map((tab) => (
-              <View
-                key={tab.id}
-                style={
-                  navigation.activeTab === tab.id ? styles.panel : styles.panelHidden
-                }
-              >
-                <ErrorBoundary
-                  title={resolveTabLabel(tab, navContext)}
-                  resetKey={`${tab.id}-${navigation.activeTab === tab.id ? "active" : "idle"}`}
-                  onError={(error) => connection.setError(error.message)}
-                >
-                  {tab.render(navContext)}
-                </ErrorBoundary>
-              </View>
-            ))
+            navigation.tabs.map((tab) =>
+              navigation.activeTab === tab.id ? (
+                <View key={tab.id} style={styles.panel}>
+                  <ErrorBoundary
+                    title={resolveTabLabel(tab, navContext)}
+                    resetKey={tab.id}
+                    onError={(error) => connection.setError(error.message)}
+                  >
+                    {tab.render(navContext)}
+                  </ErrorBoundary>
+                </View>
+              ) : null
+            )
           ) : (
             <ServerOfflinePanel connectionStatus={connection.connectionStatus} />
           )}
+        </View>
         </View>
 
         {!keyboardVisible ? (
@@ -268,7 +287,6 @@ export default function MainScreen() {
             tabs={navigation.tabs}
             activeTab={navigation.activeTab}
             ctx={navContext}
-            bottomInset={insets.bottom}
             onSelectTab={(tabId) => {
               dismissKeyboard();
               navigation.selectTab(tabId);
@@ -289,14 +307,14 @@ function createStyles(colors: ThemeColors) {
     },
     flex: {
       flex: 1,
-      paddingHorizontal: 16,
+    },
+    body: {
+      flex: 1,
     },
     header: {
       flexDirection: "row" as const,
       alignItems: "center" as const,
       justifyContent: "space-between" as const,
-      paddingTop: 8,
-      paddingBottom: 12,
       gap: 12,
     },
     titleWrap: {
@@ -318,9 +336,6 @@ function createStyles(colors: ThemeColors) {
     },
     panel: {
       flex: 1,
-    },
-    panelHidden: {
-      display: "none" as const,
     },
   };
 }

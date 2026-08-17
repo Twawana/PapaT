@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
 import React from "react";
 import {
   Platform,
@@ -8,6 +7,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   NavigationContext,
   NavigationTabConfig,
@@ -15,9 +15,8 @@ import {
   TabId,
 } from "../config/navigationTabs";
 import { useTheme } from "../context/ThemeContext";
+import { useTabBarMetrics } from "../hooks/useTabBarInset";
 import { useThemedStyles } from "../hooks/useThemedStyles";
-
-import { TAB_BAR_BOTTOM_MARGIN, TAB_BAR_HEIGHT } from "../constants/tabBarLayout";
 
 const TAB_ICONS: Record<
   TabId,
@@ -35,7 +34,6 @@ interface Props {
   tabs: NavigationTabConfig[];
   activeTab: TabId;
   ctx: NavigationContext;
-  bottomInset: number;
   onSelectTab: (tabId: TabId) => void;
 }
 
@@ -43,21 +41,20 @@ export function LiquidGlassTabBar({
   tabs,
   activeTab,
   ctx,
-  bottomInset,
   onSelectTab,
 }: Props) {
   const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
+  const metrics = useTabBarMetrics(tabs.length);
   const styles = useThemedStyles((c) => ({
     container: {
-      position: "absolute",
+      position: "absolute" as const,
       left: 0,
       right: 0,
       bottom: 0,
-      paddingHorizontal: 18,
       zIndex: 10,
     },
     shadowWrap: {
-      borderRadius: 34,
       ...Platform.select({
         ios: {
           shadowColor: c.shadow,
@@ -72,17 +69,12 @@ export function LiquidGlassTabBar({
       }),
     },
     glass: {
-      height: TAB_BAR_HEIGHT,
-      borderRadius: 34,
-      overflow: "hidden",
+      overflow: "hidden" as const,
       borderWidth: 1,
       borderColor: isDark ? "rgba(255, 255, 255, 0.14)" : c.border,
-      backgroundColor:
-        Platform.OS === "android"
-          ? isDark
-            ? "rgba(18, 22, 30, 0.88)"
-            : `${c.surfaceElevated}E0`
-          : "transparent",
+      backgroundColor: isDark
+        ? "rgba(18, 22, 30, 0.94)"
+        : `${c.surfaceElevated}F2`,
     },
     glassTint: {
       ...StyleSheet.absoluteFillObject,
@@ -92,25 +84,23 @@ export function LiquidGlassTabBar({
     },
     tabRow: {
       flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
       paddingHorizontal: 6,
       paddingVertical: 6,
     },
     tabItem: {
       flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-      minHeight: 50,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
       gap: 3,
     },
     selectionPill: {
-      position: "absolute",
+      position: "absolute" as const,
       top: 4,
       bottom: 4,
       left: 4,
       right: 4,
-      borderRadius: 22,
       backgroundColor: isDark
         ? "rgba(255, 255, 255, 0.16)"
         : c.surfaceMuted,
@@ -120,11 +110,10 @@ export function LiquidGlassTabBar({
         : c.accentBorder,
     },
     tabLabel: {
-      fontSize: 10,
-      fontWeight: "600",
+      fontWeight: "600" as const,
       letterSpacing: 0.1,
       color: c.textMuted,
-      maxWidth: "100%",
+      maxWidth: "100%" as const,
       paddingHorizontal: 2,
     },
     tabLabelActive: {
@@ -134,61 +123,104 @@ export function LiquidGlassTabBar({
 
   const iconActiveColor = colors.textPrimary;
   const iconInactiveColor = colors.iconMuted;
+  const padLeft = Math.max(metrics.sideInset, insets.left + 8);
+  const padRight = Math.max(metrics.sideInset, insets.right + 8);
+
+  const tabContent = (
+    <>
+      <View style={styles.glassTint} />
+      <View style={styles.tabRow}>
+        {tabs.map((tab) => {
+          const active = tab.id === activeTab;
+          const icons = TAB_ICONS[tab.id];
+          const label = resolveTabLabel(tab, ctx);
+          const shortLabel =
+            tab.id === "files" &&
+            ctx.workspaceName &&
+            ctx.workspaceName !== "workspace"
+              ? ctx.workspaceName.length > 8
+                ? `${ctx.workspaceName.slice(0, 7)}…`
+                : ctx.workspaceName
+              : typeof tab.label === "function"
+                ? tab.shortLabel ?? label
+                : tab.shortLabel ?? label;
+
+          return (
+            <Pressable
+              key={tab.id}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={label}
+              style={[styles.tabItem, { minHeight: metrics.tabMinHeight }]}
+              onPress={() => onSelectTab(tab.id)}
+            >
+              {active ? (
+                <View
+                  style={[
+                    styles.selectionPill,
+                    { borderRadius: metrics.pillRadius },
+                  ]}
+                />
+              ) : null}
+              <Ionicons
+                name={active ? icons.active : icons.inactive}
+                size={metrics.iconSize}
+                color={active ? iconActiveColor : iconInactiveColor}
+              />
+              {metrics.showLabels ? (
+                <Text
+                  style={[
+                    styles.tabLabel,
+                    { fontSize: metrics.labelFontSize },
+                    active && styles.tabLabelActive,
+                  ]}
+                  numberOfLines={1}
+                  allowFontScaling={false}
+                >
+                  {shortLabel}
+                </Text>
+              ) : null}
+            </Pressable>
+          );
+        })}
+      </View>
+    </>
+  );
 
   return (
     <View
       pointerEvents="box-none"
-      style={[styles.container, { paddingBottom: bottomInset + TAB_BAR_BOTTOM_MARGIN }]}
+      style={[
+        styles.container,
+        {
+          paddingLeft: padLeft,
+          paddingRight: padRight,
+          paddingBottom: insets.bottom + metrics.bottomMargin,
+        },
+      ]}
     >
-      <View style={styles.shadowWrap}>
-        <BlurView
-          intensity={Platform.OS === "ios" ? 72 : 48}
-          tint={isDark ? "dark" : "light"}
-          style={styles.glass}
+      <View
+        style={[
+          styles.shadowWrap,
+          {
+            borderRadius: metrics.borderRadius,
+            alignSelf: metrics.maxBarWidth ? "center" : "stretch",
+            width: metrics.maxBarWidth ? metrics.maxBarWidth : "100%",
+            maxWidth: "100%",
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.glass,
+            {
+              height: metrics.height,
+              borderRadius: metrics.borderRadius,
+            },
+          ]}
         >
-          <View style={styles.glassTint} />
-          <View style={styles.tabRow}>
-            {tabs.map((tab) => {
-              const active = tab.id === activeTab;
-              const icons = TAB_ICONS[tab.id];
-              const label = resolveTabLabel(tab, ctx);
-              const shortLabel =
-                tab.id === "files" &&
-                ctx.workspaceName &&
-                ctx.workspaceName !== "workspace"
-                  ? ctx.workspaceName.length > 8
-                    ? `${ctx.workspaceName.slice(0, 7)}…`
-                    : ctx.workspaceName
-                  : typeof tab.label === "function"
-                    ? tab.shortLabel ?? label
-                    : tab.shortLabel ?? label;
-
-              return (
-                <Pressable
-                  key={tab.id}
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected: active }}
-                  accessibilityLabel={label}
-                  style={styles.tabItem}
-                  onPress={() => onSelectTab(tab.id)}
-                >
-                  {active ? <View style={styles.selectionPill} /> : null}
-                  <Ionicons
-                    name={active ? icons.active : icons.inactive}
-                    size={22}
-                    color={active ? iconActiveColor : iconInactiveColor}
-                  />
-                  <Text
-                    style={[styles.tabLabel, active && styles.tabLabelActive]}
-                    numberOfLines={1}
-                  >
-                    {shortLabel}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </BlurView>
+          {tabContent}
+        </View>
       </View>
     </View>
   );

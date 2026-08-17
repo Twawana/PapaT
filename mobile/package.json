@@ -1,6 +1,6 @@
 {
   "name": "papat-mobile",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "main": "index.ts",
   "scripts": {
     "start": "expo start --offline",
@@ -14,19 +14,21 @@
     "eas:init": "eas init",
     "eas:login": "powershell -ExecutionPolicy Bypass -File scripts/eas-login.ps1",
     "build:android:apk": "powershell -ExecutionPolicy Bypass -File scripts/build-android-apk.ps1",
-    "build:android:store": "eas build --platform android --profile production",
-    "submit:android": "eas submit --platform android --profile production"
+    "build:android:store": "npx eas-cli@16.32.0 build --platform android --profile production",
+    "submit:android": "npx eas-cli@16.32.0 submit --platform android --profile production"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
-    "@expo/vector-icons": "^15.0.3",
+    "@expo/vector-icons": "15.0.3",
     "babel-preset-expo": "~54.0.10",
-    "expo": "^54.0.0",
+    "expo": "~54.0.36",
     "expo-asset": "~12.0.13",
     "expo-blur": "~15.0.8",
+    "expo-build-properties": "~1.0.10",
     "expo-camera": "~17.0.10",
     "expo-clipboard": "~8.0.8",
     "expo-document-picker": "~14.0.8",
+    "expo-font": "14.0.12",
     "expo-haptics": "~15.0.8",
     "expo-image-picker": "~17.0.11",
     "expo-screen-orientation": "~9.0.9",
@@ -42,8 +44,11 @@
   "devDependencies": {
     "@babel/core": "^7.26.10",
     "@types/react": "~19.1.0",
-    "eas-cli": "^16.28.0",
     "typescript": "^5.8.2"
+  },
+  "overrides": {
+    "expo-font": "14.0.12",
+    "@expo/vector-icons": "15.0.3"
   },
   "private": true
 }

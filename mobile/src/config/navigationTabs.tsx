@@ -1,10 +1,12 @@
-import React from "react";
-import AgentScreen from "../screens/AgentScreen";
-import CodeScreen from "../screens/CodeScreen";
-import FilesScreen from "../screens/FilesScreen";
-import GitScreen from "../screens/GitScreen";
+import React, { Suspense } from "react";
+import { ActivityIndicator, View } from "react-native";
 import ProjectsScreen from "../screens/ProjectsScreen";
-import TerminalScreen from "../screens/TerminalScreen";
+
+const AgentScreen = React.lazy(() => import("../screens/AgentScreen"));
+const CodeScreen = React.lazy(() => import("../screens/CodeScreen"));
+const FilesScreen = React.lazy(() => import("../screens/FilesScreen"));
+const GitScreen = React.lazy(() => import("../screens/GitScreen"));
+const TerminalScreen = React.lazy(() => import("../screens/TerminalScreen"));
 
 export type TabId = "open" | "agent" | "terminal" | "code" | "files" | "git";
 
@@ -26,6 +28,18 @@ export interface NavigationTabConfig {
   shortLabel?: string;
   visible?: (ctx: NavigationContext) => boolean;
   render: (ctx: NavigationContext) => React.ReactNode;
+}
+
+function TabFallback() {
+  return (
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+      <ActivityIndicator />
+    </View>
+  );
+}
+
+function withSuspense(node: React.ReactNode) {
+  return <Suspense fallback={<TabFallback />}>{node}</Suspense>;
 }
 
 const ALL_TABS: NavigationTabConfig[] = [
@@ -50,23 +64,25 @@ const ALL_TABS: NavigationTabConfig[] = [
         ? `Agent · ${ctx.workspaceName}`
         : "Agent",
     shortLabel: "Agent",
-    render: (ctx) => (
-      <AgentScreen
-        isConnected={ctx.isConnected}
-        workspacePath={ctx.workspacePath}
-        workspaceName={ctx.workspaceName}
-        onWorkspaceChange={ctx.onWorkspaceChange}
-        onError={ctx.onError}
-      />
-    ),
+    render: (ctx) =>
+      withSuspense(
+        <AgentScreen
+          isConnected={ctx.isConnected}
+          workspacePath={ctx.workspacePath}
+          workspaceName={ctx.workspaceName}
+          onWorkspaceChange={ctx.onWorkspaceChange}
+          onError={ctx.onError}
+        />
+      ),
   },
   {
     id: "terminal",
     label: "Terminal",
     shortLabel: "Shell",
-    render: (ctx) => (
-      <TerminalScreen isConnected={ctx.isConnected} onError={ctx.onError} />
-    ),
+    render: (ctx) =>
+      withSuspense(
+        <TerminalScreen isConnected={ctx.isConnected} onError={ctx.onError} />
+      ),
   },
   {
     id: "code",
@@ -75,30 +91,32 @@ const ALL_TABS: NavigationTabConfig[] = [
         ? `Code · ${ctx.workspaceName}`
         : "Code",
     shortLabel: "Code",
-    render: (ctx) => (
-      <CodeScreen
-        key={ctx.workspacePath ?? "default"}
-        isConnected={ctx.isConnected}
-        workspacePath={ctx.workspacePath}
-        workspaceName={ctx.workspaceName}
-        onError={ctx.onError}
-        isActive={ctx.activeTab === "code"}
-      />
-    ),
+    render: (ctx) =>
+      withSuspense(
+        <CodeScreen
+          key={ctx.workspacePath ?? "default"}
+          isConnected={ctx.isConnected}
+          workspacePath={ctx.workspacePath}
+          workspaceName={ctx.workspaceName}
+          onError={ctx.onError}
+          isActive={ctx.activeTab === "code"}
+        />
+      ),
   },
   {
     id: "git",
     label: "Git",
     shortLabel: "Git",
-    render: (ctx) => (
-      <GitScreen
-        isConnected={ctx.isConnected}
-        onError={ctx.onError}
-        onOpenFile={(path) => {
-          ctx.onOpenInEditor(path);
-        }}
-      />
-    ),
+    render: (ctx) =>
+      withSuspense(
+        <GitScreen
+          isConnected={ctx.isConnected}
+          onError={ctx.onError}
+          onOpenFile={(path) => {
+            ctx.onOpenInEditor(path);
+          }}
+        />
+      ),
   },
   {
     id: "files",
@@ -107,19 +125,20 @@ const ALL_TABS: NavigationTabConfig[] = [
         ? `Files · ${ctx.workspaceName}`
         : "Files",
     shortLabel: "Files",
-    render: (ctx) => (
-      <FilesScreen
-        key={ctx.workspacePath ?? "default"}
-        isConnected={ctx.isConnected}
-        vscodeConnected={ctx.vscodeConnected}
-        workspaceName={ctx.workspaceName}
-        workspacePath={ctx.workspacePath}
-        onError={ctx.onError}
-        onOpenInEditor={(path) => {
-          ctx.onOpenInEditor(path);
-        }}
-      />
-    ),
+    render: (ctx) =>
+      withSuspense(
+        <FilesScreen
+          key={ctx.workspacePath ?? "default"}
+          isConnected={ctx.isConnected}
+          vscodeConnected={ctx.vscodeConnected}
+          workspaceName={ctx.workspaceName}
+          workspacePath={ctx.workspacePath}
+          onError={ctx.onError}
+          onOpenInEditor={(path) => {
+            ctx.onOpenInEditor(path);
+          }}
+        />
+      ),
   },
 ];
 

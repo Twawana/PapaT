@@ -2,7 +2,7 @@
   "expo": {
     "name": "Titus",
     "slug": "papat",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -25,13 +25,14 @@
         "backgroundColor": "#0d1117"
       },
       "package": "com.papat.mobile",
-      "versionCode": 1,
-      "usesCleartextTraffic": true,
+      "versionCode": 4,
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.INTERNET",
-        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.ACCESS_NETWORK_STATE"
+      ],
+      "blockedPermissions": [
         "android.permission.RECORD_AUDIO"
       ]
     },
@@ -40,6 +41,15 @@
     },
     "plugins": [
       "expo-asset",
+      "expo-font",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ],
       [
         "expo-screen-orientation",
         {

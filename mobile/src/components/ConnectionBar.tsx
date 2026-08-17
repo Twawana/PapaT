@@ -9,9 +9,12 @@ import {
 } from "react-native";
 import { useTheme } from "../context/ThemeContext";
 import { DEV_LOCAL_IP, HOST_SERVER_PORT } from "../config/api";
+import { useScreenLayout } from "../hooks/useScreenLayout";
 import { useThemedStyles } from "../hooks/useThemedStyles";
 import { ConnectionStatus } from "../types/protocol";
-import { QrPairModal } from "./QrPairModal";
+const QrPairModal = React.lazy(() =>
+  import("./QrPairModal").then((mod) => ({ default: mod.QrPairModal }))
+);
 
 interface Props {
   host: string;
@@ -55,6 +58,7 @@ export function ConnectionBar({
   onDetailsVisibleChange,
 }: Props) {
   const { colors } = useTheme();
+  const screen = useScreenLayout();
   const styles = useThemedStyles((c) => ({
     compactRow: {
       flexDirection: "row",
@@ -86,10 +90,9 @@ export function ConnectionBar({
       backgroundColor: c.accent,
       borderRadius: 14,
       paddingVertical: 16,
-      paddingHorizontal: 32,
+      paddingHorizontal: 24,
       alignItems: "center" as const,
       width: "100%" as const,
-      maxWidth: 320,
     },
     qrPrimaryBtnText: {
       color: c.onPrimary,
@@ -110,6 +113,7 @@ export function ConnectionBar({
     },
     pairedConnectRow: {
       flexDirection: "row" as const,
+      flexWrap: "wrap" as const,
       gap: 8,
       justifyContent: "center" as const,
       marginBottom: 12,
@@ -129,6 +133,7 @@ export function ConnectionBar({
     },
     connectionBar: {
       flexDirection: "row",
+      flexWrap: "wrap",
       gap: 8,
       marginBottom: 8,
     },
@@ -144,6 +149,7 @@ export function ConnectionBar({
     },
     hostInput: {
       flex: 1,
+      minWidth: 140,
     },
     portInput: {
       width: 72,
@@ -224,6 +230,7 @@ export function ConnectionBar({
     },
     secondaryRow: {
       flexDirection: "row",
+      flexWrap: "wrap",
       gap: 8,
       marginBottom: 8,
     },
@@ -315,9 +322,18 @@ export function ConnectionBar({
                     Previously paired with this PC. Tap Connect to reconnect, or
                     scan a new QR code.
                   </Text>
-                  <View style={styles.pairedConnectRow}>
+                  <View
+                    style={[
+                      styles.pairedConnectRow,
+                      screen.narrow && { flexDirection: "column", alignItems: "stretch" },
+                    ]}
+                  >
                     <Pressable
-                      style={[styles.connectBtn, busy && styles.btnDisabled]}
+                      style={[
+                        styles.connectBtn,
+                        busy && styles.btnDisabled,
+                        screen.narrow && { minHeight: 44 },
+                      ]}
                       onPress={onConnect}
                       disabled={busy}
                     >
@@ -331,12 +347,21 @@ export function ConnectionBar({
                       )}
                     </Pressable>
                     <Pressable
-                      style={styles.scanBtn}
+                      style={[
+                        styles.scanBtn,
+                        screen.narrow && { flex: 0, minHeight: 44 },
+                      ]}
                       onPress={() => setQrVisible(true)}
                     >
                       <Text style={styles.scanBtnText}>Scan new QR</Text>
                     </Pressable>
-                    <Pressable style={styles.forgetBtn} onPress={onForgetDevice}>
+                    <Pressable
+                      style={[
+                        styles.forgetBtn,
+                        screen.narrow && { alignItems: "center", minHeight: 44 },
+                      ]}
+                      onPress={onForgetDevice}
+                    >
                       <Text style={styles.forgetBtnText}>Forget</Text>
                     </Pressable>
                   </View>
@@ -345,7 +370,11 @@ export function ConnectionBar({
                 /* Not paired — big QR button as primary action */
                 <View style={styles.qrPrimary}>
                   <Pressable
-                    style={[styles.qrPrimaryBtn, busy && styles.btnDisabled]}
+                    style={[
+                      styles.qrPrimaryBtn,
+                      busy && styles.btnDisabled,
+                      { maxWidth: Math.min(360, screen.width - 48) },
+                    ]}
                     onPress={() => setQrVisible(true)}
                     disabled={busy}
                   >
@@ -499,17 +528,21 @@ export function ConnectionBar({
         </Text>
       ) : null}
 
-      <QrPairModal
-        visible={qrVisible}
-        onClose={() => setQrVisible(false)}
-        onScanned={(qrHost, qrPort, code) => {
-          onError(null);
-          onPairFromQr(qrHost, qrPort, code);
-        }}
-        onError={(message) => {
-          onError(message);
-        }}
-      />
+      {qrVisible ? (
+        <React.Suspense fallback={null}>
+          <QrPairModal
+            visible={qrVisible}
+            onClose={() => setQrVisible(false)}
+            onScanned={(qrHost, qrPort, code) => {
+              onError(null);
+              onPairFromQr(qrHost, qrPort, code);
+            }}
+            onError={(message) => {
+              onError(message);
+            }}
+          />
+        </React.Suspense>
+      ) : null}
     </View>
   );
 }

@@ -1,0 +1,41 @@
+# EAS uploads from the git repo root. Keep the archive tiny.
+# (.easignore replaces .gitignore for uploads)
+
+.git
+.git/
+
+# Electron / desktop build output (was ~470MB)
+/dist2/
+/dist/
+/build/
+
+# Dependencies
+node_modules/
+
+# Not part of the mobile APK (root-only paths)
+/host-server/
+/vscode-extension/
+/desktop-ui/
+/scripts/
+/T/
+/.vscode/
+/main.js
+/package.json
+/package-lock.json
+/render.yaml
+/TODO.md
+/README.md
+
+# Mobile local junk
+/mobile/node_modules/
+/mobile/_asset-temp/
+/mobile/.expo/
+/mobile/dist/
+/mobile/web-build/
+
+.env
+.env.*
+*.log
+.DS_Store
+*.exe
+*.blockmap
