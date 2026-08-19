@@ -69,7 +69,8 @@
           "cameraPermission": "Allow Titus to take photos for agent prompts."
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-sqlite"
     ],
     "extra": {
       "eas": {

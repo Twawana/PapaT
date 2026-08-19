@@ -7,8 +7,10 @@ import {
   View,
 } from "react-native";
 import { useTheme } from "../context/ThemeContext";
+import { useOfflineOptional } from "../context/OfflineContext";
 import { useThemedStyles } from "../hooks/useThemedStyles";
 import { useFileEntryOperations } from "../hooks/useFileEntryOperations";
+import { listProjectDirectory } from "../services/localDb";
 import { titusClient } from "../services/websocket";
 import { FileEntry } from "../types/protocol";
 import { isPathRoot, parentPath } from "../utils/paths";
@@ -26,6 +28,7 @@ export function FileTreePanel({
   onOpenFile,
   onError,
 }: Props) {
+  const offline = useOfflineOptional();
   const { colors } = useTheme();
   const styles = useThemedStyles((c) => ({
     panel: {
@@ -64,6 +67,11 @@ export function FileTreePanel({
       fontSize: 10,
       marginBottom: 4,
     },
+    offlineBadge: {
+      color: c.warning ?? "#ffb020",
+      fontSize: 9,
+      marginBottom: 4,
+    },
     loader: {
       marginTop: 12,
     },
@@ -87,24 +95,54 @@ export function FileTreePanel({
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const load = useCallback(async (dir: string) => {
-    if (!titusClient.isConnected()) return;
-    setLoading(true);
-    try {
-      const result = await titusClient.listDir(dir);
-      setPath(result.path || dir);
-      setEntries(result.entries);
-    } catch {
-      setEntries([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const useLocal =
+    Boolean(offline?.activeProject?.offlineEnabled) &&
+    (!titusClient.isConnected() || offline?.workspaceMode === "offline_working");
+
+  const load = useCallback(
+    async (dir: string) => {
+      setLoading(true);
+      try {
+        if (useLocal && offline?.activeProject?.id) {
+          const localEntries = await listProjectDirectory(
+            offline.activeProject.id,
+            dir
+          );
+          setPath(dir);
+          setEntries(
+            localEntries.map((item) => ({
+              name: item.path.split("/").pop() ?? item.path,
+              path: item.path,
+              entryType: item.entryType,
+              size: item.content?.length,
+              mtime: item.localMtime,
+            }))
+          );
+          return;
+        }
+
+        if (!titusClient.isConnected()) {
+          setEntries([]);
+          return;
+        }
+
+        const result = await titusClient.listDir(dir);
+        setPath(result.path || dir);
+        setEntries(result.entries);
+      } catch {
+        setEntries([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [useLocal, offline?.activeProject?.id]
+  );
 
   const { openEntryActions, OperationModals } = useFileEntryOperations({
     onError: onError ?? (() => {}),
     onChanged: () => load(path),
     onOpenInEditor: onOpenFile,
+    offlineProjectId: useLocal ? offline?.activeProject?.id ?? null : null,
   });
 
   useEffect(() => {
@@ -115,7 +153,7 @@ export function FileTreePanel({
     if (visible) {
       void load(path);
     }
-  }, [visible, load, path, workspaceKey]);
+  }, [visible, load, path, workspaceKey, useLocal]);
 
   if (!visible) return null;
 
@@ -135,6 +173,9 @@ export function FileTreePanel({
         </Text>
       </View>
 
+      {useLocal ? (
+        <Text style={styles.offlineBadge}>Local copy · offline</Text>
+      ) : null}
       <Text style={styles.hint}>Hold to rename, move, or delete</Text>
 
       {loading ? (

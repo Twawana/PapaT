@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { useTheme } from "../context/ThemeContext";
+import { useOffline } from "../context/OfflineContext";
 import { useTabBarInset } from "../hooks/useTabBarInset";
 import { useThemedStyles } from "../hooks/useThemedStyles";
 import { titusClient } from "../services/websocket";
@@ -39,6 +40,7 @@ export default function ProjectsScreen({
   onWorkspaceChange,
   onError,
 }: Props) {
+  const offline = useOffline();
   const { colors } = useTheme();
   const styles = useThemedStyles((c) => ({
     container: {
@@ -272,6 +274,7 @@ export default function ProjectsScreen({
   const [browseEntries, setBrowseEntries] = useState<BrowseEntry[]>([]);
   const [browseRoots, setBrowseRoots] = useState<BrowseRoot[]>([]);
   const [browseLoading, setBrowseLoading] = useState(false);
+  const [openingOffline, setOpeningOffline] = useState(false);
   const tabBarInset = useTabBarInset();
 
   const loadRecent = useCallback(async () => {
@@ -374,6 +377,25 @@ export default function ProjectsScreen({
     void openProject(browsePath);
   };
 
+  const openOfflineProject = (pcPath: string, name: string) => {
+    setSelectedPath(pcPath);
+    onWorkspaceChange(pcPath, name);
+    onError(null);
+  };
+
+  const handleEnableOffline = async () => {
+    if (!selectedPath) return;
+    setOpeningOffline(true);
+    try {
+      await offline.enableOffline();
+      onError(null);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Failed to download for offline");
+    } finally {
+      setOpeningOffline(false);
+    }
+  };
+
   const selectedName =
     recent.find((item) => item.path === selectedPath)?.name ||
     selectedPath?.split(/[/\\]/).pop() ||
@@ -444,7 +466,56 @@ export default function ProjectsScreen({
         >
           <Text style={styles.secondaryBtnText}>Browse PC folders</Text>
         </Pressable>
+        {isConnected && selectedPath ? (
+          <Pressable
+            style={[
+              styles.secondaryBtn,
+              (openingOffline || offline.activeProject?.offlineEnabled) && styles.btnDisabled,
+            ]}
+            disabled={openingOffline || Boolean(offline.activeProject?.offlineEnabled)}
+            onPress={() => void handleEnableOffline()}
+          >
+            <Text style={styles.secondaryBtnText}>
+              {openingOffline
+                ? "Downloading for offline…"
+                : offline.activeProject?.offlineEnabled
+                  ? "Available offline"
+                  : "Make available offline"}
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
+
+      {!isConnected && offline.offlineProjects.length > 0 ? (
+        <>
+          <Text style={styles.sectionTitle}>Offline projects</Text>
+          {offline.offlineProjects.map((item) => {
+            const active = item.pcPath === selectedPath;
+            return (
+              <Pressable
+                key={item.id}
+                style={[styles.recentRow, active && styles.recentRowActive]}
+                onPress={() => openOfflineProject(item.pcPath, item.name)}
+              >
+                <Text style={styles.recentIcon}>📱</Text>
+                <View style={styles.recentBody}>
+                  <Text style={styles.recentName}>{item.name}</Text>
+                  <Text style={styles.recentPath} numberOfLines={1}>
+                    {item.pcPath}
+                  </Text>
+                  <Text style={styles.recentMeta}>
+                    {item.syncStatus === "pending"
+                      ? "Changes waiting to sync"
+                      : item.syncStatus === "conflict"
+                        ? "Conflicts need attention"
+                        : "Work offline · sync when PC returns"}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </>
+      ) : null}
 
       <Text style={styles.sectionTitle}>Recent folders</Text>
 

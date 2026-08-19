@@ -1,4 +1,4 @@
-import { AgentProviderId, ClientMessage, EditorId, ExecuteLanguage, ServerMessage, ShellKind } from "../types/protocol";
+import { AgentProviderId, ClientMessage, EditorId, ExecuteLanguage, ServerMessage, ShellKind, SyncPushChange } from "../types/protocol";
 import { buildWebSocketUrl, formatConnectionError } from "../config/api";
 import { errorMessage } from "../utils/errors";
 
@@ -523,6 +523,25 @@ export class TitusClient {
     return this.request(id, { type: "vscode_open_file", id, path }, [
       "vscode_open_file_result",
     ]);
+  }
+
+  syncManifest(): Promise<Extract<ServerMessage, { type: "sync_manifest_result" }>> {
+    const id = createRequestId("sync-manifest");
+    return this.request(id, { type: "sync_manifest", id }, ["sync_manifest_result"], 120_000);
+  }
+
+  syncPull(
+    paths: string[]
+  ): Promise<Extract<ServerMessage, { type: "sync_pull_result" }>> {
+    const id = createRequestId("sync-pull");
+    return this.request(id, { type: "sync_pull", id, paths }, ["sync_pull_result"], 120_000);
+  }
+
+  syncPush(
+    changes: SyncPushChange[]
+  ): Promise<Extract<ServerMessage, { type: "sync_push_result" }>> {
+    const id = createRequestId("sync-push");
+    return this.request(id, { type: "sync_push", id, changes }, ["sync_push_result"], 120_000);
   }
 
   searchFiles(

@@ -22,12 +22,14 @@ interface Options {
   onError: (message: string | null) => void;
   onChanged: () => void | Promise<void>;
   onOpenInEditor?: (path: string) => void;
+  offlineProjectId?: string | null;
 }
 
 export function useFileEntryOperations({
   onError,
   onChanged,
   onOpenInEditor,
+  offlineProjectId,
 }: Options) {
   const { colors } = useTheme();
   const styles = useThemedStyles((c) => ({
@@ -193,13 +195,18 @@ export function useFileEntryOperations({
   const deleteEntry = useCallback(
     async (entry: FileEntry) => {
       try {
-        await titusClient.deletePath(entry.path);
+        if (offlineProjectId) {
+          const { queueLocalDelete } = await import("../services/sync/syncEngine");
+          await queueLocalDelete(offlineProjectId, entry.path);
+        } else {
+          await titusClient.deletePath(entry.path);
+        }
         await onChanged();
       } catch (err) {
         onError(err instanceof Error ? err.message : "Failed to delete");
       }
     },
-    [onChanged, onError]
+    [onChanged, onError, offlineProjectId]
   );
 
   const confirmDelete = useCallback(
@@ -240,12 +247,17 @@ export function useFileEntryOperations({
     setRenameName("");
 
     try {
-      await titusClient.movePath(renameTarget.path, dest);
+      if (offlineProjectId) {
+        const { queueLocalMove } = await import("../services/sync/syncEngine");
+        await queueLocalMove(offlineProjectId, renameTarget.path, dest);
+      } else {
+        await titusClient.movePath(renameTarget.path, dest);
+      }
       await onChanged();
     } catch (err) {
       onError(err instanceof Error ? err.message : "Failed to rename");
     }
-  }, [onChanged, onError, renameName, renameTarget]);
+  }, [onChanged, onError, offlineProjectId, renameName, renameTarget]);
 
   const startMove = useCallback(
     async (entry: FileEntry) => {
@@ -302,14 +314,19 @@ export function useFileEntryOperations({
 
     const dest = joinPath(normalizePath(moveDestPath), moveTarget.name);
     try {
-      await titusClient.movePath(moveTarget.path, dest);
+      if (offlineProjectId) {
+        const { queueLocalMove } = await import("../services/sync/syncEngine");
+        await queueLocalMove(offlineProjectId, moveTarget.path, dest);
+      } else {
+        await titusClient.movePath(moveTarget.path, dest);
+      }
       setMoveTarget(null);
       setMoveDestPath(null);
       await onChanged();
     } catch (err) {
       onError(err instanceof Error ? err.message : "Failed to move");
     }
-  }, [moveDestPath, moveTarget, onChanged, onError]);
+  }, [moveDestPath, moveTarget, offlineProjectId, onChanged, onError]);
 
   const openEntryActions = useCallback((entry: FileEntry) => {
     setActionEntry(entry);

@@ -38,6 +38,11 @@ import {
   writeFile,
 } from "./filesystem";
 import {
+  applySyncPush,
+  buildSyncManifest,
+  pullSyncFiles,
+} from "./sync";
+import {
   getBrowseRoots,
   getWorkspaceInfo,
   getWorkspaceRecent,
@@ -489,6 +494,18 @@ function handleMessage(
 
     case "fs_grep":
       handleFsGrep(ws, message.id, message.query, message.limit);
+      break;
+
+    case "sync_manifest":
+      void handleSyncManifest(ws, message.id);
+      break;
+
+    case "sync_pull":
+      void handleSyncPull(ws, message.id, message.paths);
+      break;
+
+    case "sync_push":
+      void handleSyncPush(ws, message.id, message.changes);
       break;
 
     case "git_status":
@@ -966,6 +983,68 @@ function handleFsGrep(
       type: "error",
       id,
       message: err instanceof Error ? err.message : "Grep failed",
+    });
+  }
+}
+
+async function handleSyncManifest(ws: WebSocket, id: string): Promise<void> {
+  if (!requireRequestId(ws, id)) return;
+
+  try {
+    const files = await buildSyncManifest();
+    send(ws, { type: "sync_manifest_result", id, files });
+  } catch (err) {
+    send(ws, {
+      type: "error",
+      id,
+      message: err instanceof Error ? err.message : "Sync manifest failed",
+    });
+  }
+}
+
+async function handleSyncPull(
+  ws: WebSocket,
+  id: string,
+  paths: unknown
+): Promise<void> {
+  if (!requireRequestId(ws, id)) return;
+  if (!Array.isArray(paths)) {
+    send(ws, { type: "error", id, message: "paths must be an array" });
+    return;
+  }
+
+  try {
+    const filePaths = paths.filter((p): p is string => typeof p === "string");
+    const files = await pullSyncFiles(filePaths);
+    send(ws, { type: "sync_pull_result", id, files });
+  } catch (err) {
+    send(ws, {
+      type: "error",
+      id,
+      message: err instanceof Error ? err.message : "Sync pull failed",
+    });
+  }
+}
+
+async function handleSyncPush(
+  ws: WebSocket,
+  id: string,
+  changes: unknown
+): Promise<void> {
+  if (!requireRequestId(ws, id)) return;
+  if (!Array.isArray(changes)) {
+    send(ws, { type: "error", id, message: "changes must be an array" });
+    return;
+  }
+
+  try {
+    const result = await applySyncPush(changes as Parameters<typeof applySyncPush>[0]);
+    send(ws, { type: "sync_push_result", id, ...result });
+  } catch (err) {
+    send(ws, {
+      type: "error",
+      id,
+      message: err instanceof Error ? err.message : "Sync push failed",
     });
   }
 }

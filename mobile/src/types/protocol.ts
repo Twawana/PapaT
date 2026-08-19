@@ -136,6 +136,49 @@ export interface PackageScript {
   command: string;
 }
 
+export interface SyncManifestEntry {
+  path: string;
+  entryType: "file" | "directory";
+  mtime: number;
+  size: number;
+  hash?: string;
+}
+
+export interface SyncPullFile {
+  path: string;
+  content: string;
+  mtime: number;
+  size: number;
+  encoding?: "utf-8" | "base64";
+  mimeType?: string;
+  hash?: string;
+}
+
+export type SyncPushChange =
+  | {
+      op: "write";
+      path: string;
+      content: string;
+      baseMtime?: number;
+      create?: boolean;
+    }
+  | { op: "delete"; path: string; baseMtime?: number }
+  | { op: "mkdir"; path: string }
+  | { op: "move"; from: string; to: string; baseMtime?: number };
+
+export interface SyncApplied {
+  path: string;
+  mtime: number;
+  op: string;
+}
+
+export interface SyncConflict {
+  path: string;
+  pcContent: string;
+  pcMtime: number;
+  reason: string;
+}
+
 export type ClientMessage =
   | { type: "ping" }
   | { type: "execute"; id: string; code: string; language: ExecuteLanguage }
@@ -209,6 +252,9 @@ export type ClientMessage =
   | { type: "agent_retry"; id: string; sessionId: string }
   | { type: "vscode_get_status"; id: string }
   | { type: "vscode_open_file"; id: string; path: string }
+  | { type: "sync_manifest"; id: string }
+  | { type: "sync_pull"; id: string; paths: string[] }
+  | { type: "sync_push"; id: string; changes: SyncPushChange[] }
   | { type: "auth"; token: string }
   | { type: "pair"; code: string; deviceName?: string };
 
@@ -384,6 +430,18 @@ export type ServerMessage =
       activeFile?: string | null;
     }
   | { type: "vscode_open_file_result"; id: string; ok: boolean; message?: string }
+  | { type: "sync_manifest_result"; id: string; files: SyncManifestEntry[] }
+  | {
+      type: "sync_pull_result";
+      id: string;
+      files: SyncPullFile[];
+    }
+  | {
+      type: "sync_push_result";
+      id: string;
+      applied: SyncApplied[];
+      conflicts: SyncConflict[];
+    }
   | {
       type: "auth_required";
       serverId: string;

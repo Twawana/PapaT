@@ -10,16 +10,17 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { StatusBar } from "expo-status-bar";
 import { ConnectionBar } from "../components/ConnectionBar";
 import { ServerOfflinePanel } from "../components/ServerOfflinePanel";
+import { ConflictResolutionModal } from "../components/ConflictResolutionModal";
+import { SyncStatusBar } from "../components/SyncStatusBar";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { useTheme } from "../context/ThemeContext";
+import { OfflineProvider, useOffline } from "../context/OfflineContext";
+import { EditorProvider, useEditor } from "../context/EditorContext";
 import { useThemedStyles } from "../hooks/useThemedStyles";
-import {
-  LiquidGlassTabBar,
-} from "../components/LiquidGlassTabBar";
+import { LiquidGlassTabBar } from "../components/LiquidGlassTabBar";
 import { resolveTabLabel, TabId } from "../config/navigationTabs";
 import { KeyboardDismissView } from "../components/KeyboardDismissView";
-import { useEditor } from "../context/EditorContext";
 import {
   dismissKeyboard,
   keyboardAvoidBehavior,
@@ -53,11 +54,49 @@ function EditorActionBridge({
 }
 
 export default function MainScreen() {
+  const connection = useConnection();
+  const [workspaceName, setWorkspaceName] = useState("workspace");
+
+  const handleWorkspaceChange = useCallback(
+    (path: string, name: string) => {
+      connection.setWorkspacePath(path);
+      setWorkspaceName(name);
+    },
+    [connection]
+  );
+
+  return (
+    <OfflineProvider
+      isConnected={connection.isConnected}
+      workspacePath={connection.workspacePath}
+      workspaceName={workspaceName}
+    >
+      <MainScreenContent
+        connection={connection}
+        workspaceName={workspaceName}
+        setWorkspaceName={setWorkspaceName}
+        onWorkspaceChange={handleWorkspaceChange}
+      />
+    </OfflineProvider>
+  );
+}
+
+function MainScreenContent({
+  connection,
+  workspaceName,
+  setWorkspaceName,
+  onWorkspaceChange,
+}: {
+  connection: ReturnType<typeof useConnection>;
+  workspaceName: string;
+  setWorkspaceName: (name: string) => void;
+  onWorkspaceChange: (path: string, name: string) => void;
+}) {
+  const offline = useOffline();
   const { isDark } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const [workspaceName, setWorkspaceName] = useState("workspace");
   const [connectionDetailsVisible, setConnectionDetailsVisible] = useState(true);
-  const connection = useConnection();
+  const [conflictsVisible, setConflictsVisible] = useState(false);
   const insets = useSafeAreaInsets();
   const screen = useScreenLayout();
   const editorActionsRef = useRef<EditorActions>({
@@ -72,10 +111,9 @@ export default function MainScreen() {
         editorActionsRef.current.resetForWorkspace();
       }
       lastWorkspacePathRef.current = path;
-      connection.setWorkspacePath(path);
-      setWorkspaceName(name);
+      onWorkspaceChange(path, name);
     },
-    [connection]
+    [onWorkspaceChange]
   );
 
   useEffect(() => {
@@ -188,8 +226,13 @@ export default function MainScreen() {
   const compactKeyboard = useCompactKeyboardLayout();
   const contentInset = keyboardVisible ? insets.bottom : 0;
   const showHeaderExtras = !connection.isConnected || connectionDetailsVisible;
+  const showTabs =
+    connection.isConnected ||
+    offline.isOfflineCapable ||
+    offline.offlineProjects.length > 0;
 
   return (
+    <EditorProvider>
     <SafeAreaView
       style={styles.safe}
       edges={compactKeyboard ? [] : ["top"]}
@@ -255,6 +298,13 @@ export default function MainScreen() {
           />
         ) : null}
 
+        {offline.activeProject?.offlineEnabled ? (
+          <SyncStatusBar
+            projectName={workspaceName}
+            onShowConflicts={() => setConflictsVisible(true)}
+          />
+        ) : null}
+
         {connection.backgroundContinued && !connection.isConnected && !compactKeyboard ? (
           <Text style={styles.backgroundHint}>
             PC tasks keep running in the background. Reconnecting…
@@ -262,7 +312,7 @@ export default function MainScreen() {
         ) : null}
 
         <View style={[styles.content, { paddingBottom: contentInset }]}>
-          {connection.isConnected ? (
+          {showTabs ? (
             navigation.tabs.map((tab) =>
               navigation.activeTab === tab.id ? (
                 <View key={tab.id} style={styles.panel}>
@@ -295,7 +345,12 @@ export default function MainScreen() {
         ) : null}
         </KeyboardDismissView>
       </KeyboardAvoidingView>
+      <ConflictResolutionModal
+        visible={conflictsVisible}
+        onClose={() => setConflictsVisible(false)}
+      />
     </SafeAreaView>
+    </EditorProvider>
   );
 }
 

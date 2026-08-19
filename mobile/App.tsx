@@ -28,9 +28,7 @@ export default function App() {
               onDismiss={() => setGlobalError(null)}
             />
           ) : null}
-          <EditorProvider>
-            <MainScreen />
-          </EditorProvider>
+          <MainScreen />
         </ErrorBoundary>
       </ThemeProvider>
     </SafeAreaProvider>

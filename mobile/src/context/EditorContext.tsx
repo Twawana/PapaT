@@ -6,11 +6,6 @@ import React, {
   useState,
 } from "react";
 import { titusClient } from "../services/websocket";
-import {
-  enqueueWrite,
-  flushOfflineQueue,
-  getQueuedWrites,
-} from "../services/offlineQueue";
 import { loadRecentFiles, RecentFile, touchRecentFile } from "../services/recentFiles";
 import { ExecuteLanguage } from "../types/protocol";
 import {
@@ -19,6 +14,12 @@ import {
   isImagePath,
   isMarkdownPath,
 } from "../utils/language";
+import { useOfflineOptional } from "./OfflineContext";
+import {
+  readLocalFileContent,
+  saveLocalFileEdit,
+} from "../services/sync/syncEngine";
+import { projectIdFromPath } from "../services/sync/exclusions";
 
 export interface OpenFile {
   path: string;
@@ -29,6 +30,8 @@ export interface OpenFile {
   previewMode?: "editor" | "markdown" | "image";
   encoding?: "utf-8" | "base64";
   mimeType?: string;
+  /** True when saved locally but not yet on PC */
+  pendingSync?: boolean;
 }
 
 interface EditorContextValue {
@@ -55,11 +58,13 @@ interface EditorContextValue {
 const EditorContext = createContext<EditorContextValue | null>(null);
 
 export function EditorProvider({ children }: { children: React.ReactNode }) {
+  const offline = useOfflineOptional();
   const [tabs, setTabs] = useState<OpenFile[]>([]);
   const [activePath, setActivePath] = useState<string | null>(null);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
   const [treeVisible, setTreeVisible] = useState(true);
-  const [pendingWrites, setPendingWrites] = useState(0);
+
+  const pendingWrites = offline?.pendingChanges ?? 0;
 
   const refreshRecent = useCallback(async () => {
     const list = await loadRecentFiles();
@@ -69,6 +74,11 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     void refreshRecent();
   }, [refreshRecent]);
+
+  const canUseLocal = Boolean(
+    offline?.activeProject?.offlineEnabled && offline.activeProject.id
+  );
+  const projectId = offline?.activeProject?.id ?? null;
 
   const openFile = useCallback(
     async (path: string) => {
@@ -94,11 +104,42 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
       setTabs((prev) => [...prev, placeholder]);
       setActivePath(path);
 
+      // Try local storage first when project is offline-enabled
+      if (canUseLocal && projectId) {
+        const local = await readLocalFileContent(projectId, path);
+        if (local) {
+          const recent = await touchRecentFile(path);
+          setRecentFiles(recent);
+          setTabs((prev) =>
+            prev.map((tab) =>
+              tab.path === path
+                ? {
+                    ...tab,
+                    content: local.content,
+                    savedContent: local.content,
+                    loading: false,
+                    encoding: local.encoding,
+                    mimeType: local.mimeType ?? undefined,
+                    pendingSync: false,
+                  }
+                : tab
+            )
+          );
+          return;
+        }
+      }
+
       if (!titusClient.isConnected()) {
         setTabs((prev) =>
           prev.map((tab) =>
             tab.path === path
-              ? { ...tab, loading: false, content: "// Connect to PC to load file" }
+              ? {
+                  ...tab,
+                  loading: false,
+                  content: canUseLocal
+                    ? "// File not found in local copy"
+                    : "// Connect to PC or enable offline for this project",
+                }
               : tab
           )
         );
@@ -119,6 +160,7 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
                   loading: false,
                   encoding: result.encoding ?? "utf-8",
                   mimeType: result.mimeType,
+                  pendingSync: false,
                 }
               : tab
           )
@@ -129,7 +171,7 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
         throw err;
       }
     },
-    [tabs]
+    [tabs, canUseLocal, projectId]
   );
 
   const closeTab = useCallback((path: string) => {
@@ -149,33 +191,66 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
-  const saveFile = useCallback(async (path?: string) => {
-    const targetPath = path ?? activePath;
-    if (!targetPath) return;
+  const saveFile = useCallback(
+    async (path?: string) => {
+      const targetPath = path ?? activePath;
+      if (!targetPath) return;
 
-    const tab = tabs.find((item) => item.path === targetPath);
-    if (!tab || tab.content === tab.savedContent) return;
+      const tab = tabs.find((item) => item.path === targetPath);
+      if (!tab || tab.content === tab.savedContent) return;
 
-    if (!titusClient.isConnected()) {
-      enqueueWrite(targetPath, tab.content, false);
-      setPendingWrites(getQueuedWrites().length);
+      if (canUseLocal && projectId) {
+        await saveLocalFileEdit(
+          projectId,
+          targetPath,
+          tab.content,
+          tab.encoding ?? "utf-8",
+          tab.mimeType
+        );
+        await offline?.refreshProjects();
+
+        setTabs((prev) =>
+          prev.map((item) =>
+            item.path === targetPath
+              ? {
+                  ...item,
+                  savedContent: tab.content,
+                  pendingSync: !titusClient.isConnected(),
+                }
+              : item
+          )
+        );
+
+        if (titusClient.isConnected()) {
+          try {
+            await offline?.syncNow();
+            setTabs((prev) =>
+              prev.map((item) =>
+                item.path === targetPath ? { ...item, pendingSync: false } : item
+              )
+            );
+          } catch {
+            /* queued for later */
+          }
+        }
+        return;
+      }
+
+      if (!titusClient.isConnected()) {
+        throw new Error("PC unavailable — enable offline for this project to save locally.");
+      }
+
+      await titusClient.writeFile(targetPath, tab.content, false);
       setTabs((prev) =>
         prev.map((item) =>
-          item.path === targetPath ? { ...item, savedContent: tab.content } : item
+          item.path === targetPath
+            ? { ...item, savedContent: tab.content, pendingSync: false }
+            : item
         )
       );
-      return;
-    }
-
-    await titusClient.writeFile(targetPath, tab.content, false);
-    setTabs((prev) =>
-      prev.map((item) =>
-        item.path === targetPath
-          ? { ...item, savedContent: tab.content }
-          : item
-      )
-    );
-  }, [activePath, tabs]);
+    },
+    [activePath, tabs, canUseLocal, projectId, offline]
+  );
 
   const saveActive = useCallback(async () => {
     await saveFile(activePath ?? undefined);
@@ -206,10 +281,16 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const flushPendingWrites = useCallback(async () => {
-    const result = await flushOfflineQueue();
-    setPendingWrites(getQueuedWrites().length);
-    return result;
-  }, []);
+    if (offline?.activeProject?.offlineEnabled) {
+      try {
+        await offline.syncNow();
+        return { ok: offline.pendingChanges, failed: 0 };
+      } catch {
+        return { ok: 0, failed: offline.pendingChanges };
+      }
+    }
+    return { ok: 0, failed: 0 };
+  }, [offline]);
 
   const resetForWorkspace = useCallback(() => {
     setTabs([]);
